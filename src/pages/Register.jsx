@@ -1,0 +1,6 @@
+import{useState}from'react';
+import{useNavigate}from'react-router-dom';
+import Navbar from'../components/Navbar';
+import{addCandidate}from'../services/employeeService';
+
+export default function Register(){const nav=useNavigate();const[form,setForm]=useState({name:'',email:'',phone:'',role:'React Developer',experience:'Fresher'});const set=(k,v)=>setForm({...form,[k]:v});const submit=e=>{e.preventDefault();addCandidate(form);nav('/login')};return <><Navbar/><main className="form-page"><form className="form-card" onSubmit={submit}><span className="eyebrow">Candidate onboarding</span><h1>Create your Verify-X profile</h1><div className="form-grid"><label>Full Name<input required value={form.name} onChange={e=>set('name',e.target.value)}/></label><label>Email<input required value={form.email} onChange={e=>set('email',e.target.value)}/></label><label>Phone<input value={form.phone} onChange={e=>set('phone',e.target.value)}/></label><label>Role<input value={form.role} onChange={e=>set('role',e.target.value)}/></label><label>Experience<select value={form.experience} onChange={e=>set('experience',e.target.value)}><option>Fresher</option><option>1 Year</option><option>2 Years</option><option>3+ Years</option></select></label></div><button className="btn primary">Submit Registration</button></form></main></>}

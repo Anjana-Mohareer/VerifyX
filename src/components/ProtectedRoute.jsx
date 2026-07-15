@@ -1,0 +1,2 @@
+import{Navigate}from'react-router-dom';import useAuth from'../hooks/useAuth';
+export default function ProtectedRoute({allowed,children}){const{session}=useAuth();if(!session)return <Navigate to="/" replace/>;if(allowed&&!allowed.includes(session.type))return <Navigate to={session.type==='CANDIDATE'?'/candidate':'/dashboard'} replace/>;return children;}
