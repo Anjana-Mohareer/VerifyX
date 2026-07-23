@@ -14,7 +14,7 @@ export default function LandingPage() {
             <span className="pill landing-pill">Enterprise HR Verification</span>
 
             <h1>
-              Verify offer letters, candidates and documents in one secure platform.
+              Turn every document into a trusted decision
             </h1>
 
             <p>

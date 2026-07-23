@@ -22,7 +22,10 @@ export default function Sidebar({ type }) {
     ["/profile", "🙍 Profile"],
   ];
 
-  const links = role === "CANDIDATE" ? cand : admin;
+  const isCandidate = role === "CANDIDATE";
+  const links = isCandidate ? cand : admin;
+  const footerName = isCandidate ? (session?.name || "Candidate") : (session?.name || "HR");
+  const footerRole = isCandidate ? "CANDIDATE" : "HR";
 
   return (
     <aside className="sidebar">
@@ -37,7 +40,7 @@ export default function Sidebar({ type }) {
       ))}
 
       <div className="side-footer">
-        <small>{session?.name || "User"} • {role}</small>
+        <small>{footerName} • {footerRole}</small>
         <button
           className="btn full"
           onClick={() => {

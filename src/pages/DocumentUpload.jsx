@@ -13,7 +13,34 @@ import {
 } from "../services/employeeService";
 import { fileToDataUrl } from "../services/storage";
 
-const FRESHER_DOCUMENTS = ["Resume", "PAN Card"];
+const FRESHER_DOCUMENTS = ["Resume", "Offer Letter", "Aadhaar Card", "PAN Card"];
+
+const DOCUMENT_RULES = {
+  Resume: { accept: ".pdf,.doc,.docx", label: "PDF, DOC or DOCX", maxMb: 5 },
+  "PAN Card": { accept: ".pdf,.png,.jpg,.jpeg", label: "PDF, JPG or PNG", maxMb: 5 },
+  "Aadhaar Card": { accept: ".pdf,.png,.jpg,.jpeg", label: "PDF, JPG or PNG", maxMb: 5 },
+  "Offer Letter": { accept: ".pdf", label: "PDF only", maxMb: 5 },
+  "Last Month Salary Slip": { accept: ".pdf", label: "PDF only", maxMb: 5 },
+  "Relieving Letter": { accept: ".pdf", label: "PDF only", maxMb: 5 },
+  "Experience Letter": { accept: ".pdf", label: "PDF only", maxMb: 5 },
+  "UAN Proof": { accept: ".pdf,.png,.jpg,.jpeg", label: "PDF, JPG or PNG", maxMb: 5 },
+};
+
+function getDocumentRule(name) {
+  return DOCUMENT_RULES[name] || { accept: ".pdf", label: "PDF only", maxMb: 5 };
+}
+
+function getMissingDocuments(candidate) {
+  const required = getRequiredDocuments(candidate);
+  const uploaded = candidate?.documents || [];
+  return required.filter((name) => !uploaded.some((doc) => doc.name === name));
+}
+
+function isAcceptedFile(file, rule) {
+  const extension = `.${String(file.name || "").split(".").pop().toLowerCase()}`;
+  const allowed = rule.accept.split(",").map((item) => item.trim().toLowerCase());
+  return allowed.includes(extension);
+}
 
 const EXPERIENCED_DOCUMENTS = [
   "Resume",
@@ -67,6 +94,21 @@ export default function DocumentUpload({ mode = "admin" }) {
     }
   }, [mode, session]);
 
+  useEffect(() => {
+    if (mode !== "candidate" || !c) return;
+    const missing = getMissingDocuments(c);
+    if (!missing.length) return;
+
+    const alertKey = `verifyx-missing-docs-${c.id}-${missing.join("|")}`;
+    if (sessionStorage.getItem(alertKey)) return;
+    sessionStorage.setItem(alertKey, "shown");
+    alert(
+      `Document Alert: Please upload the following required documents:
+
+• ${missing.join("\n• ")}`
+    );
+  }, [mode, c]);
+
   const candidates = useMemo(() => {
     return [...candidateItems].sort((a, b) => {
       const dateA = new Date(getCandidateTime(a)).getTime();
@@ -92,6 +134,17 @@ export default function DocumentUpload({ mode = "admin" }) {
 
   const addDoc = async (name, file) => {
     if (!file || !c) return;
+
+    const rule = getDocumentRule(name);
+    if (!isAcceptedFile(file, rule)) {
+      alert(`${name} accepts ${rule.label} only. Please select the required file format.`);
+      return;
+    }
+
+    if (file.size > rule.maxMb * 1024 * 1024) {
+      alert(`${name} must be ${rule.maxMb} MB or smaller.`);
+      return;
+    }
 
     const existingDoc = (c.documents || []).find((d) => d.name === name);
     const existingStatus = getDocStatus(existingDoc);
@@ -154,6 +207,7 @@ export default function DocumentUpload({ mode = "admin" }) {
 
   const renderUploadCard = (name) => {
     const found = (c.documents || []).find((d) => d.name === name);
+    const rule = getDocumentRule(name);
     const status = found ? getDocStatus(found) : "NOT_UPLOADED";
     const isVerified = status === DOC_STATUS.VERIFIED;
     const isRejected = status === DOC_STATUS.REJECTED;
@@ -170,7 +224,7 @@ export default function DocumentUpload({ mode = "admin" }) {
         <div className="upload-info">
           <h3>{name}</h3>
           <p>
-            {found ? `Uploaded: ${found.fileName}` : "PDF, JPG, PNG accepted"}
+            {found ? `Uploaded: ${found.fileName}` : `${rule.label} • Maximum ${rule.maxMb} MB`}
           </p>
 
           {found && (
@@ -193,7 +247,7 @@ export default function DocumentUpload({ mode = "admin" }) {
         {!isVerified && (
           <input
             type="file"
-            accept=".pdf,.png,.jpg,.jpeg"
+            accept={rule.accept}
             onChange={(e) => addDoc(name, e.target.files?.[0])}
           />
         )}
@@ -273,6 +327,14 @@ export default function DocumentUpload({ mode = "admin" }) {
                   <b>Document re-upload rule:</b> Only documents rejected by HR can be re-uploaded. Verified documents are locked.
                 </p>
               </div>
+
+              {getMissingDocuments(c).length > 0 && (
+                <div className="missing-document-alert" role="alert">
+                  <strong>⚠ Missing required documents</strong>
+                  <p>Please upload these files before submission:</p>
+                  <ul>{getMissingDocuments(c).map((name) => <li key={name}>{name}</li>)}</ul>
+                </div>
+              )}
 
               {c.candidateType === "Experienced" && (
                 <div className="employment-summary-card">
@@ -358,6 +420,13 @@ export default function DocumentUpload({ mode = "admin" }) {
                     <p><b>UAN:</b> {candidate.uan || "-"}</p>
                     <p><b>Holding Offer Letter:</b> {candidate.holdingOfferLetter || "No"}</p>
                   </div>
+
+                  {getMissingDocuments(candidate).length > 0 && (
+                    <div className="missing-document-alert" role="alert">
+                      <strong>⚠ Candidate has missing documents</strong>
+                      <p>{getMissingDocuments(candidate).join(", ")}</p>
+                    </div>
+                  )}
 
                   <h3>Documents</h3>
 

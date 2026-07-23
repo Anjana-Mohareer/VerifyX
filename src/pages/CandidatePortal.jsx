@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import Sidebar from "../components/Sidebar";
 import useAuth from "../hooks/useAuth";
 import { allCandidates, findCandidate, updateCandidate } from "../services/employeeService";
-import { LANGUAGES, SKILLS, SOFT_SKILLS } from "../utils/constants";
+import { SKILLS } from "../utils/constants";
 import { REGEX, cleanPan, findDuplicateIdentity, onlyDigits, onlyLetters } from "../utils/validators";
 
 export default function CandidatePortal() {
@@ -401,7 +401,7 @@ export default function CandidatePortal() {
               </select>
             </div>
 
-            <div className="actions">
+            <div className="actions candidate-step-actions">
               <button className="btn" onClick={saveDraft}>
                 Save Draft
               </button>
@@ -465,43 +465,7 @@ export default function CandidatePortal() {
               </div>
             </div>
 
-            <div className="form-block">
-              <h3>Soft Skills</h3>
-              <div className="chips">
-                {SOFT_SKILLS.map((skill) => (
-                  <label key={skill}>
-                    <input
-                      type="checkbox"
-                      checked={(c.softSkills || []).includes(skill)}
-                      onChange={(e) =>
-                        toggleMultiValue("softSkills", skill, e.target.checked)
-                      }
-                    />
-                    {skill}
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            <div className="form-block">
-              <h3>Languages Known</h3>
-              <div className="chips">
-                {LANGUAGES.map((language) => (
-                  <label key={language}>
-                    <input
-                      type="checkbox"
-                      checked={(c.languages || []).includes(language)}
-                      onChange={(e) =>
-                        toggleMultiValue("languages", language, e.target.checked)
-                      }
-                    />
-                    {language}
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            <div className="actions">
+            <div className="actions candidate-step-actions">
               <button className="btn" onClick={() => goToStep(1)}>
                 Back
               </button>
@@ -586,7 +550,7 @@ export default function CandidatePortal() {
                   <h3>Current Employment Details</h3>
 
                   <div className="employment-status-box">
-                    <label>
+                    <label className={c.currentlyEmployed === "Yes" ? "selected" : ""}>
                       <input
                         type="radio"
                         name="currentlyEmployed"
@@ -597,7 +561,7 @@ export default function CandidatePortal() {
                       Currently Employed
                     </label>
 
-                    <label>
+                    <label className={c.currentlyEmployed !== "Yes" ? "selected" : ""}>
                       <input
                         type="radio"
                         name="currentlyEmployed"
@@ -642,7 +606,7 @@ export default function CandidatePortal() {
                   <h3>Offer Letter Details</h3>
 
                   <div className="employment-status-box">
-                    <label>
+                    <label className={c.holdingOfferLetter === "Yes" ? "selected" : ""}>
                       <input
                         type="radio"
                         name="holdingOfferLetter"
@@ -653,7 +617,7 @@ export default function CandidatePortal() {
                       Holding Offer Letter
                     </label>
 
-                    <label>
+                    <label className={c.holdingOfferLetter !== "Yes" ? "selected" : ""}>
                       <input
                         type="radio"
                         name="holdingOfferLetter"
@@ -699,7 +663,7 @@ export default function CandidatePortal() {
               </>
             )}
 
-            <div className="actions">
+            <div className="actions candidate-step-actions">
               <button className="btn" onClick={() => goToStep(2)}>
                 Back
               </button>
@@ -722,7 +686,7 @@ export default function CandidatePortal() {
               Please upload the required documents before final submission.
             </p>
 
-            <div className="actions">
+            <div className="actions candidate-step-actions">
               <Link className="btn primary" to="/candidate-documents">
                 Upload Documents
               </Link>
@@ -766,8 +730,6 @@ export default function CandidatePortal() {
               <div>
                 <h3>Skills</h3>
                 <p><b>Technical:</b> {(c.skills || []).join(", ") || "No skills selected"}</p>
-                <p><b>Soft Skills:</b> {(c.softSkills || []).join(", ") || "Not provided"}</p>
-                <p><b>Languages:</b> {(c.languages || []).join(", ") || "Not provided"}</p>
               </div>
 
               <div>

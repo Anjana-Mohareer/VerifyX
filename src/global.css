@@ -3006,3 +3006,129 @@ td small {
     min-width: 0;
   }
 }
+
+/* HR editable profile */
+.page-title-row{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:18px}.page-title-row h1{margin-bottom:4px}.profile-panel{max-width:880px}.hr-profile-panel{position:relative}.hr-profile-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;margin-top:22px}.hr-profile-form label{display:flex;flex-direction:column;gap:7px;font-weight:700;color:#26364d}.hr-profile-form input{width:100%;padding:12px 14px;border:1px solid #d7dfeb;border-radius:10px;font:inherit;background:#fff}.hr-profile-form input:focus{outline:2px solid rgba(40,113,222,.18);border-color:#2871de}.hr-profile-form .actions{grid-column:1/-1;margin-top:4px}.field-error{font-size:.82rem;color:#c62828;font-weight:600}.profile-success{margin:16px 0 4px;padding:11px 14px;border-radius:10px;background:#eaf8ef;color:#19733a;font-weight:700}.profile-details-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-top:22px}.profile-details-grid>div{padding:16px;border:1px solid #e1e7f0;border-radius:12px;background:#f8fafc}.profile-details-grid span{display:block;margin-bottom:6px;color:#6b778a;font-size:.86rem}.profile-details-grid strong{color:#26364d;word-break:break-word}@media(max-width:700px){.page-title-row{flex-direction:column}.hr-profile-form,.profile-details-grid{grid-template-columns:1fr}.page-title-row .btn{width:100%}}
+
+
+/* Candidate portal layout fixes */
+.candidate-step-actions {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+  clear: both;
+  margin-top: 28px !important;
+  padding-top: 20px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.candidate-step-actions .btn,
+.candidate-step-actions a.btn {
+  flex: 0 1 auto;
+  min-width: 145px;
+  max-width: 100%;
+  white-space: normal;
+  text-align: center;
+}
+
+.form-block + .candidate-step-actions,
+.chips + .candidate-step-actions,
+.grid2 + .candidate-step-actions {
+  margin-top: 28px !important;
+}
+
+.employment-status-box {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  width: 100%;
+  margin: 14px 0 24px;
+}
+
+.employment-status-box label {
+  min-height: 54px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  margin: 0;
+  padding: 13px 16px;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  background: #ffffff;
+  color: #334155;
+  line-height: 1.35;
+}
+
+.employment-status-box input[type="radio"] {
+  appearance: auto;
+  -webkit-appearance: radio;
+  width: 18px !important;
+  height: 18px !important;
+  min-width: 18px;
+  flex: 0 0 18px;
+  margin: 0 !important;
+  padding: 0;
+  accent-color: #2563eb;
+  cursor: pointer;
+}
+
+.employment-status-box label.selected {
+  border-color: #2563eb;
+  background: #eff6ff;
+  color: #1d4ed8;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.10);
+}
+
+@media (max-width: 700px) {
+  .candidate-step-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .candidate-step-actions .btn,
+  .candidate-step-actions a.btn {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .employment-status-box {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Required document format and missing-document alerts */
+.missing-document-alert {
+  margin: 16px 0;
+  padding: 16px 18px;
+  border: 1px solid #f59e0b;
+  border-left: 5px solid #f59e0b;
+  border-radius: 12px;
+  background: #fffbeb;
+  color: #78350f;
+}
+.missing-document-alert p { margin: 6px 0; }
+.missing-document-alert ul { margin: 8px 0 0 20px; }
+.critical-validation-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+.critical-validation-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px;
+  border-radius: 12px;
+  border: 1px solid #f59e0b;
+  background: #fffbeb;
+}
+.critical-validation-card.verified {
+  border-color: #22c55e;
+  background: #f0fdf4;
+}
+.critical-validation-card span { font-size: 0.88rem; }

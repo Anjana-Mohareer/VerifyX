@@ -33,7 +33,7 @@ export default function EmployeeList() {
     return sortedItems.filter((c) =>
       `${c.fullName || c.name || ""} ${c.email || ""} ${c.phone || ""} ${
         c.id || ""
-      } ${(c.skills || []).join(" ")} ${(c.softSkills || []).join(" ")} ${(c.languages || []).join(" ")}`
+      } ${(c.skills || []).join(" ")}`
         .toLowerCase()
         .includes(search)
     );

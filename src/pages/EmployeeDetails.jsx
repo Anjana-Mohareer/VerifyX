@@ -1,5 +1,5 @@
 import { useParams } from "react-router-dom";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Sidebar from "../components/Sidebar";
 import {
   DOC_STATUS,
@@ -15,6 +15,60 @@ function getDocStatus(doc) {
   return doc?.status || (doc?.verified ? DOC_STATUS.VERIFIED : DOC_STATUS.PENDING);
 }
 
+const FRESHER_REQUIRED_DOCUMENTS = ["Resume", "Offer Letter", "Aadhaar Card", "PAN Card"];
+const EXPERIENCED_REQUIRED_DOCUMENTS = [
+  "Resume", "Offer Letter", "Last Month Salary Slip", "Relieving Letter",
+  "Experience Letter", "PAN Card", "UAN Proof",
+];
+
+function getRequiredDocuments(candidate) {
+  return candidate?.candidateType === "Experienced"
+    ? EXPERIENCED_REQUIRED_DOCUMENTS
+    : FRESHER_REQUIRED_DOCUMENTS;
+}
+
+function getMissingDocuments(candidate) {
+  const uploaded = candidate?.documents || [];
+  return getRequiredDocuments(candidate).filter(
+    (name) => !uploaded.some((doc) => doc.name === name)
+  );
+}
+
+function isDocumentVerified(candidate, name) {
+  const doc = (candidate?.documents || []).find((item) => item.name === name);
+  return doc && getDocStatus(doc) === DOC_STATUS.VERIFIED;
+}
+
+
+function formatFieldLabel(key) {
+  const labels = {
+    id: "ID",
+    createdAt: "Created At",
+    updatedAt: "Updated At",
+    submittedAt: "Submitted At",
+    fullName: "Full Name",
+    candidateType: "Candidate Type",
+    profileStep: "Profile Step",
+    appliedRole: "Applied Role",
+    employmentStatus: "Employment Status",
+    currentlyEmployed: "Currently Employed",
+    holdingOfferLetter: "Holding Offer Letter",
+    aadhaar: "Aadhaar",
+    pan: "PAN",
+    uan: "UAN",
+    uanNumber: "UAN Number",
+    uanVerified: "UAN Verified",
+    uanVerifiedBy: "UAN Verified By",
+    uanVerifiedAt: "UAN Verified At",
+    lastCtc: "Last CTC",
+  };
+
+  if (labels[key]) return labels[key];
+
+  const spaced = key.replace(/([a-z0-9])([A-Z])/g, "$1 $2").replace(/[_-]+/g, " ");
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+}
+
 function getStatusLabel(status) {
   if (status === DOC_STATUS.VERIFIED) return "Verified";
   if (status === DOC_STATUS.REJECTED) return "Rejected";
@@ -26,6 +80,30 @@ export default function EmployeeDetails() {
   const [c, setC] = useState(findCandidate(id));
   const [remarks, setRemarks] = useState(c?.remarks || "");
   const [loading, setLoading] = useState(false);
+
+  const missingDocuments = c ? getMissingDocuments(c) : [];
+  const criticalDocuments = c?.candidateType === "Experienced"
+    ? ["PAN Card", "UAN Proof", "Offer Letter"]
+    : ["PAN Card", "Aadhaar Card", "Offer Letter"];
+  const unverifiedCriticalDocuments = c
+    ? criticalDocuments.filter((name) => !isDocumentVerified(c, name))
+    : [];
+
+  useEffect(() => {
+    if (!c || missingDocuments.length === 0) return;
+    const alertKey = `verifyx-hr-missing-docs-${c.id}-${missingDocuments.join("|")}`;
+    if (sessionStorage.getItem(alertKey)) return;
+    sessionStorage.setItem(alertKey, "shown");
+    alert(
+      `Missing Document Alert for HR
+
+The following required documents are missing:
+
+• ${missingDocuments.join("\n• ")}
+
+Ask the candidate to upload them.`
+    );
+  }, [c?.id, missingDocuments.join("|")]);
 
   if (!c) {
     return (
@@ -39,8 +117,36 @@ export default function EmployeeDetails() {
   }
 
   const setStatus = async (status) => {
-    if (status === "Approved" && c.candidateType === "Experienced" && c.uan && !c.uanVerified) {
-      alert("Please verify the candidate UAN before approving the application.");
+    if (status === "Approved" && missingDocuments.length > 0) {
+      alert(
+        `Cannot approve. Required documents are missing:
+
+• ${missingDocuments.join("\n• ")}`
+      );
+      return;
+    }
+
+    if (status === "Approved" && !/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(String(c.pan || "").toUpperCase())) {
+      alert("Cannot approve. PAN must be in a valid format such as ABCDE1234F.");
+      return;
+    }
+
+    if (status === "Approved" && c.candidateType === "Experienced" && !/^\d{12}$/.test(String(c.uan || ""))) {
+      alert("Cannot approve. UAN must contain exactly 12 digits.");
+      return;
+    }
+
+    if (status === "Approved" && c.candidateType === "Experienced" && !c.uanVerified) {
+      alert("Please verify the candidate UAN number before approving the application.");
+      return;
+    }
+
+    if (status === "Approved" && unverifiedCriticalDocuments.length > 0) {
+      alert(
+        `Cannot approve. HR must validate these critical documents:
+
+• ${unverifiedCriticalDocuments.join("\n• ")}`
+      );
       return;
     }
 
@@ -118,16 +224,14 @@ export default function EmployeeDetails() {
           <div className="skill-review-box">
             <h3>Candidate Skills</h3>
             <p><b>Technical Skills:</b> {(c.skills || []).join(", ") || "No skills selected"}</p>
-            <p><b>Soft Skills:</b> {(c.softSkills || []).join(", ") || "Not provided"}</p>
-            <p><b>Languages:</b> {(c.languages || []).join(", ") || "Not provided"}</p>
           </div>
 
           <div className="details">
             {Object.entries(c)
-              .filter(([k]) => !["password", "documents"].includes(k))
+              .filter(([k]) => !["password", "documents", "softSkills", "languages"].includes(k))
               .map(([k, v]) => (
                 <p key={k}>
-                  <b>{k}:</b> {Array.isArray(v) ? v.join(", ") : String(v || "-")}
+                  <b>{formatFieldLabel(k)}:</b> {Array.isArray(v) ? v.join(", ") : String(v || "-")}
                 </p>
               ))}
           </div>
@@ -157,6 +261,32 @@ export default function EmployeeDetails() {
             )}
           </section>
         )}
+
+        {missingDocuments.length > 0 && (
+          <section className="panel missing-document-alert" role="alert">
+            <h2>⚠ Missing Document Alert</h2>
+            <p>The candidate must upload the following documents:</p>
+            <ul>{missingDocuments.map((name) => <li key={name}>{name}</li>)}</ul>
+            <button className="btn warn" onClick={() => setStatus("Re-upload Required")}>Alert Candidate / Request Upload</button>
+          </section>
+        )}
+
+        <section className="panel">
+          <h2>Critical Document Validation</h2>
+          <p className="muted">HR must validate PAN, UAN proof and Offer Letter before final approval.</p>
+          <div className="critical-validation-grid">
+            {criticalDocuments.map((name) => {
+              const uploaded = (c.documents || []).find((doc) => doc.name === name);
+              const verified = isDocumentVerified(c, name);
+              return (
+                <div className={`critical-validation-card ${verified ? "verified" : "pending"}`} key={name}>
+                  <strong>{name}</strong>
+                  <span>{!uploaded ? "Missing" : verified ? "Validated by HR" : "Pending HR validation"}</span>
+                </div>
+              );
+            })}
+          </div>
+        </section>
 
         <section className="panel">
           <h2>Documents Review</h2>
