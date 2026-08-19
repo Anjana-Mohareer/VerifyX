@@ -1,0 +1,224 @@
+.login-page-rich {
+  min-height: calc(100vh - 78px);
+  background:
+    radial-gradient(circle at 10% 12%, rgba(37, 99, 235, .10), transparent 28%),
+    radial-gradient(circle at 90% 18%, rgba(14, 165, 233, .10), transparent 25%),
+    linear-gradient(135deg, #ffffff 0%, #f7fbff 58%, #eef8ff 100%);
+}
+
+.auth-modern-shell {
+  gap: clamp(26px, 4vw, 58px);
+}
+
+.auth-modern-card {
+  background: rgba(255,255,255,.98);
+  border: 1px solid #dfe8f4;
+  box-shadow: 0 24px 60px rgba(42, 79, 124, .11);
+}
+
+.auth-modern-card h1 {
+  color: #16325c;
+  font-weight: 850;
+}
+
+.auth-mini-label {
+  color: #2563eb;
+}
+
+.auth-subtitle {
+  color: #65758b !important;
+}
+
+.auth-modern-card input[type="email"],
+.auth-modern-card input[type="password"],
+.auth-modern-card input[type="text"],
+.auth-modern-card input[type="tel"] {
+  background: #ffffff;
+  color: #1f2937;
+  border: 1px solid #cfdceb;
+  box-shadow: inset 0 1px 2px rgba(15,23,42,.02);
+}
+
+.auth-modern-card input::placeholder {
+  color: #98a6b8;
+}
+
+.auth-modern-card input:focus {
+  border-color: #4f83f1;
+  box-shadow: 0 0 0 4px rgba(79, 131, 241, .10);
+}
+
+.field-label,
+.remember-row,
+.signup-line {
+  color: #34465f;
+}
+
+.forgot-button,
+.signup-line a {
+  color: #2563eb;
+}
+
+.auth-login-btn {
+  background: linear-gradient(135deg, #2f6fe7, #1ea7e8) !important;
+  box-shadow: 0 14px 28px rgba(37, 99, 235, .2);
+}
+
+.login-story-card {
+  position: relative;
+  overflow: hidden;
+  text-align: left !important;
+  display: flex !important;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start !important;
+  padding: clamp(36px, 5vw, 64px) !important;
+  background:
+    radial-gradient(circle at 86% 14%, rgba(56, 189, 248, .20), transparent 27%),
+    radial-gradient(circle at 12% 88%, rgba(99, 102, 241, .12), transparent 28%),
+    linear-gradient(145deg, #ffffff 0%, #eef6ff 100%) !important;
+  color: #17365d !important;
+  border: 1px solid #dce8f5 !important;
+  box-shadow: 0 24px 60px rgba(42, 79, 124, .11) !important;
+}
+
+.login-story-card::after {
+  content: "";
+  position: absolute;
+  right: -60px;
+  top: -70px;
+  width: 240px;
+  height: 240px;
+  border-radius: 50%;
+  background: rgba(37, 99, 235, .06);
+}
+
+.story-orb {
+  background: linear-gradient(135deg, #4f75ee, #27b7c9);
+  box-shadow: 0 16px 34px rgba(54, 104, 190, .20);
+  animation: none !important;
+  transform: none !important;
+}
+
+.story-orb-logo {
+  width: 62%;
+  height: 62%;
+  object-fit: contain;
+  display: block;
+}
+
+.login-story-card h2 {
+  color: #183b67 !important;
+  font-weight: 850;
+}
+
+.login-story-card p {
+  color: #63768f !important;
+  max-width: 520px;
+}
+
+.story-steps span {
+  background: #ffffff;
+  color: #47627f;
+  border: 1px solid #d9e5f2;
+  box-shadow: 0 6px 16px rgba(42, 79, 124, .05);
+}
+
+.verification-tabs {
+  background: #eef4fb;
+  border: 1px solid #dde7f2;
+}
+
+.verification-tabs button {
+  color: #607087;
+}
+
+.verification-tabs button.active {
+  color: #1d4ed8;
+  background: #ffffff;
+}
+
+@media (max-width: 900px) {
+  .auth-modern-shell { grid-template-columns: 1fr; }
+  .login-story-card { min-height: 280px; }
+}
+
+@media (max-width: 700px) {
+  .login-story-card { display: none !important; }
+  .login-page-rich { padding: 18px 14px 28px; }
+  .auth-modern-card { border-radius: 22px; }
+}
+.login-history-hint{display:block;margin:-5px 0 12px;color:#708198;font-size:10px;line-height:1.4}
+
+/* Compact, centered login composition */
+.login-page-rich{min-height:calc(100dvh - 68px)!important;padding:22px clamp(16px,4vw,52px)!important;display:grid!important;align-items:center!important}
+.auth-modern-shell{width:min(1220px,100%)!important;min-height:auto!important;grid-template-columns:minmax(390px,520px) minmax(460px,650px)!important;justify-content:center!important;gap:clamp(24px,3vw,42px)!important;align-items:stretch!important}
+.auth-modern-card{max-width:520px!important;width:100%!important;min-height:590px!important;padding:32px 38px!important;border-radius:24px!important;display:flex!important;flex-direction:column!important;justify-content:center!important}
+.auth-modern-card>.auth-mini-label,.auth-modern-card>h1,.auth-modern-card>.auth-subtitle{text-align:center!important}.auth-modern-card>.auth-mini-label{font-weight:700!important;letter-spacing:.09em!important}.auth-modern-card>h1{font-size:clamp(35px,3.2vw,45px)!important;line-height:1.08!important;font-weight:650!important;letter-spacing:-.025em!important;margin:14px 0 10px!important}.auth-modern-card>.auth-subtitle{max-width:410px;margin:0 auto 24px!important;font-size:15px!important;line-height:1.55!important}
+.auth-modern-card .field-label{font-weight:650!important}.auth-modern-card input[type="email"],.auth-modern-card input[type="password"],.auth-modern-card input[type="text"],.auth-modern-card input[type="tel"]{min-height:54px!important}.auth-modern-card .auth-options{margin:16px 0!important}.auth-modern-card .auth-login-btn{min-height:50px!important}.auth-modern-card .signup-line{text-align:center!important;margin-top:15px!important}
+.login-story-card{min-height:590px!important;max-height:650px!important;padding:40px!important;border-radius:24px!important;align-items:center!important;text-align:center!important}.login-story-card h2{font-size:clamp(28px,2.6vw,36px)!important;font-weight:650!important;letter-spacing:-.02em!important;margin:24px 0 9px!important}.login-story-card p{text-align:center!important;max-width:480px!important}.story-steps{justify-content:center!important}
+@media(max-width:900px){.auth-modern-shell{grid-template-columns:minmax(0,620px)!important}.auth-modern-card{max-width:580px!important;min-height:auto!important}.login-story-card{display:none!important}}
+@media(max-width:560px){.login-page-rich{padding:14px 10px 24px!important;align-items:start!important}.auth-modern-card{padding:24px 17px!important;border-radius:19px!important}.auth-modern-card>h1{font-size:32px!important}.auth-modern-card>.auth-subtitle{font-size:13px!important;margin-bottom:18px!important}.auth-modern-card input[type="email"],.auth-modern-card input[type="password"],.auth-modern-card input[type="text"],.auth-modern-card input[type="tel"]{min-height:49px!important}}
+
+/* Keep login labels completely above the fields instead of sitting on the border. */
+.auth-modern-card .field-label {
+  display: block !important;
+  align-self: stretch;
+  margin: 8px 0 8px !important;
+  padding: 0 !important;
+  background: transparent !important;
+  position: static !important;
+  line-height: 1.35;
+}
+
+.auth-modern-card .login-history-hint {
+  margin: -2px 0 10px !important;
+}
+
+/* Keep the password visibility control fixed inside the input. */
+.auth-modern-card .password-wrap {
+  position: relative !important;
+  display: block !important;
+  width: 100% !important;
+  margin: 0 0 8px !important;
+}
+
+.auth-modern-card .password-wrap input {
+  display: block !important;
+  width: 100% !important;
+  margin: 0 !important;
+  padding-right: 56px !important;
+}
+
+.auth-modern-card .password-toggle,
+.auth-modern-card .password-toggle:hover,
+.auth-modern-card .password-toggle:focus,
+.auth-modern-card .password-toggle:active {
+  position: absolute !important;
+  top: 50% !important;
+  right: 10px !important;
+  bottom: auto !important;
+  left: auto !important;
+  width: 38px !important;
+  height: 38px !important;
+  min-width: 38px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  display: grid !important;
+  place-items: center !important;
+  line-height: 1 !important;
+  transform: translateY(-50%) !important;
+  box-shadow: none !important;
+}
+
+@media (max-width: 560px) {
+  .auth-modern-card .password-toggle,
+  .auth-modern-card .password-toggle:hover,
+  .auth-modern-card .password-toggle:focus,
+  .auth-modern-card .password-toggle:active {
+    width: 34px !important;
+    height: 34px !important;
+    min-width: 34px !important;
+    right: 8px !important;
+  }
+}
