@@ -24,7 +24,7 @@ export async function registerCandidate(data) {
     phoneNumber: data.phone,
     password: data.password,
     appliedRole: data.appliedRole,
-    candidateType: String(data.candidateType).toUpperCase(),
+    candidateType: data.candidateType,
   };
 
   try {

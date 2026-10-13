@@ -16,13 +16,14 @@ const normalizeApplicationStatus = (status) => {
   return aliases[normalized] || normalized;
 };
 
-export const updateStatus = async (id, status, remarks = "") => {
+export const updateStatus = async (id, status, remarks = "", interviewSlots = []) => {
   if (!id) return Promise.reject(new Error("Candidate ID is required to update status."));
   const normalizedStatus = normalizeApplicationStatus(status);
   const normalizedRemarks = String(remarks || "").trim();
   try {
-    return await api.updateStatus(id, { status: normalizedStatus, remarks: normalizedRemarks });
-  } catch {
+    return await api.updateStatus(id, { status: normalizedStatus, remarks: normalizedRemarks, ...(interviewSlots.length ? { interviewSlots } : {}) });
+  } catch (error) {
+    if (interviewSlots.length || normalizedStatus === 'APPROVED') throw error;
     const updated = updateSubmittedApplication(id, { status: normalizedStatus, remarks: normalizedRemarks, statusUpdatedAt: new Date().toISOString() });
     if (!updated) throw new Error('Unable to update candidate status.');
     return updated;

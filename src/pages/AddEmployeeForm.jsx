@@ -1,19 +1,32 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Sidebar from "../components/Sidebar";
 import { addCandidate } from "../services/employeeService";
-import { onlyDigits } from "../utils/validators";
+import { api } from "../services/apiService";
 
 export default function AddEmployeeForm() {
   const navigate = useNavigate();
   const [err, setErr] = useState("");
-  const [saving, setSaving] = useState(false);
+  const [roleOptions, setRoleOptions] = useState([]);
+  const [candidateTypeOptions, setCandidateTypeOptions] = useState([]);
+  const [optionsLoading, setOptionsLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    api.registrationOptions().then((options) => {
+      if (!active) return;
+      setRoleOptions(Array.isArray(options?.appliedRoles) ? options.appliedRoles : []);
+      setCandidateTypeOptions(Array.isArray(options?.candidateTypes) ? options.candidateTypes : []);
+    }).catch((error) => { if (active) setErr(error.message || "Unable to load roles from backend."); })
+      .finally(() => { if (active) setOptionsLoading(false); });
+    return () => { active = false; };
+  }, []);
 
   const [form, setForm] = useState({
     fullName: "",
     email: "",
     phone: "",
-    candidateType: "Fresher",
+    candidateType: "FRESHER",
     appliedRole: "",
     status: "Draft",
   });
@@ -26,32 +39,17 @@ export default function AddEmployeeForm() {
     e.preventDefault();
     setErr("");
 
-    const fullName = form.fullName.trim();
-    const email = form.email.trim();
-    const phone = form.phone.trim();
-
-    if (!fullName) {
-      setErr("Full name is required.");
-      return;
-    }
-    if (!/^\d{10}$/.test(phone)) {
-      setErr("Phone number must contain only numbers and be exactly 10 digits.");
+    if (!/^\d{10}$/.test(form.phone)) {
+      setErr("Phone number must contain exactly 10 digits.");
       return;
     }
 
-    setSaving(true);
     try {
-      await addCandidate({ ...form, fullName, email, phone });
+      await addCandidate(form);
       alert("Candidate added successfully.");
-      // Go to the full Candidate Management list, which shows every
-      // candidate regardless of status. (The Dashboard overview only
-      // shows candidates who have submitted documents, so a freshly
-      // added "Draft" candidate would otherwise appear to vanish.)
-      navigate("/employees");
+      navigate("/dashboard");
     } catch (error) {
       setErr(error.message || "Failed to add candidate.");
-    } finally {
-      setSaving(false);
     }
   };
 
@@ -91,26 +89,30 @@ export default function AddEmployeeForm() {
               />
 
               <input
-                placeholder="Phone (10 digits)"
-                value={form.phone}
-                onChange={(e) => set("phone", onlyDigits(e.target.value, 10))}
+                placeholder="Phone"
+                type="text"
                 inputMode="numeric"
+                pattern="[0-9]{10}"
                 maxLength={10}
+                value={form.phone}
+                onChange={(e) => set("phone", e.target.value.replace(/\D/g, "").slice(0, 10))}
+                title="Enter exactly 10 digits"
                 required
               />
 
-              <input
-                placeholder="Applied Role"
+              <select
+                aria-label="Applied Role"
                 value={form.appliedRole}
                 onChange={(e) => set("appliedRole", e.target.value)}
-              />
-
-              <select
-                value={form.candidateType}
-                onChange={(e) => set("candidateType", e.target.value)}
+                required
+                disabled={optionsLoading || !roleOptions.length}
               >
-                <option>Fresher</option>
-                <option>Experienced</option>
+                <option value="" disabled>{optionsLoading ? "Loading roles from backend..." : "Select Applied Role"}</option>
+                {roleOptions.map((role) => <option key={role.value} value={role.value}>{role.label}</option>)}
+              </select>
+
+              <select value={form.candidateType} onChange={(e) => set("candidateType", e.target.value)} disabled={optionsLoading || !candidateTypeOptions.length}>
+                {candidateTypeOptions.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
               </select>
 
               <select
@@ -126,8 +128,8 @@ export default function AddEmployeeForm() {
             </div>
 
             <div className="form-actions">
-              <button type="submit" className="btn primary" disabled={saving}>
-                {saving ? "Saving..." : "Save Candidate"}
+              <button type="submit" className="btn primary">
+                Save Candidate
               </button>
 
               <button

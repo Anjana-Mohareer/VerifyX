@@ -31,7 +31,16 @@ const ENUM_TO_SKILL = Object.fromEntries(
 );
 
 const normalizeSkills = (candidate = {}) => {
-  const source = candidate.skills ?? candidate.technicalSkills ?? candidate.profile?.technicalSkills ?? [];
+  const source = candidate.skills
+    ?? candidate.technicalSkills
+    ?? candidate.selectedSkills
+    ?? candidate.profile?.skills
+    ?? candidate.profile?.technicalSkills
+    ?? candidate.profile?.selectedSkills
+    ?? candidate.review?.skills
+    ?? candidate.review?.technicalSkills
+    ?? candidate.review?.selectedSkills
+    ?? [];
   const values = Array.isArray(source)
     ? source
     : typeof source === 'string'
@@ -55,9 +64,70 @@ const toTechnicalSkillEnums = (skills = []) =>
     .map((skill) => SKILL_TO_ENUM[skill] || String(skill).trim().toUpperCase().replaceAll('.', '').replaceAll(' ', '_'))
     .filter(Boolean);
 
+
+const joinAddressParts = (...parts) => parts
+  .flat()
+  .map((value) => String(value ?? '').trim())
+  .filter(Boolean)
+  .filter((value, index, values) => values.indexOf(value) === index)
+  .join(', ');
+
+const buildPermanentAddress = (source = {}) => {
+  if (source.permanentAddress) return source.permanentAddress;
+  const main = [
+    source.permanentAddressLine1 ?? source.permanentLine1,
+    source.permanentAddressLine2 ?? source.permanentLine2,
+    source.permanentAreaLocality ?? source.permanentArea,
+    source.permanentCity,
+    source.permanentDistrict,
+    source.permanentState,
+    source.permanentPincode,
+  ].map((value) => String(value ?? '').trim()).filter(Boolean);
+  return main.length ? joinAddressParts(main, source.permanentCountry) : '';
+};
+
+const buildCurrentAddress = (source = {}) => {
+  const direct = source.currentResidentialAddress || source.currentAddress || source.currentLiveAddress;
+  if (direct) return direct;
+  const main = [
+    source.currentAddressLine1 ?? source.currentLine1,
+    source.currentAddressLine2 ?? source.currentLine2,
+    source.currentAreaLocality ?? source.currentArea,
+    source.currentCity,
+    source.currentDistrict,
+    source.currentState,
+    source.currentPincode,
+  ].map((value) => String(value ?? '').trim()).filter(Boolean);
+  return main.length ? joinAddressParts(main, source.currentCountry) : '';
+};
+
+const hasCoordinates = (source = {}) => {
+  const lat = source.currentLatitude ?? source.currentLiveLat ?? source.currentAddressLat;
+  const lng = source.currentLongitude ?? source.currentLiveLng ?? source.currentAddressLng;
+  return lat !== '' && lat != null && lng !== '' && lng != null;
+};
+
+const currentAddressSource = (source = {}) => {
+  const hasGpsProof = Boolean(
+    source.currentAddressPhotoAvailable
+    || source.houseSelfieUploaded
+    || source.currentLivePhoto
+    || source.currentLiveAt
+  );
+  if (hasGpsProof) return 'GPS';
+  if (buildCurrentAddress(source)) return 'MANUAL';
+  return hasCoordinates(source) ? 'GPS' : '';
+};
+
 export const DOC_STATUS = { PENDING: 'PENDING', VERIFIED: 'VERIFIED', REJECTED: 'REJECTED' };
 
 export function isSubmittedCandidate(candidate = {}) {
+  // Current Address GPS photo is written to the backend only during the final
+  // Submit Application flow. For server-backed HR rows it is therefore the
+  // cross-browser submission marker; registered/incomplete candidates stay hidden.
+  if (candidate.backendSubmissionReady) return true;
+  if (candidate.backendContactChecked && !candidate.backendSubmissionReady && !candidate.submittedAt) return false;
+
   const status = String(candidate.status || candidate.verificationStatus || '').toUpperCase();
   const submittedStatus = [
     'SUBMITTED', 'PENDING_VERIFICATION', 'DOCUMENTS_VERIFIED',
@@ -127,6 +197,14 @@ function mergeLocalCandidate(local = {}, application = {}) {
     master: application.master,
     currentEmployer: application.currentEmployer,
     previousEmployer: application.previousEmployer,
+    permanentAddress: buildPermanentAddress(application) || buildPermanentAddress(local) || '',
+    currentResidentialAddress: buildCurrentAddress(application) || buildCurrentAddress(local) || '',
+    emergencyContactNumber: application.emergencyContactNumber || local.emergencyContactNumber || '',
+    referenceNumber: application.referenceNumber || local.referenceNumber || '',
+    currentLatitude: application.currentLatitude ?? application.currentLiveLat ?? application.currentAddressLat ?? local.currentLatitude ?? '',
+    currentLongitude: application.currentLongitude ?? application.currentLiveLng ?? application.currentAddressLng ?? local.currentLongitude ?? '',
+    houseSelfieUploaded: Boolean(application.houseSelfieUploaded || application.currentLivePhoto || local.houseSelfieUploaded),
+    currentAddressSource: currentAddressSource(application) || currentAddressSource(local),
     // Exact list of documents this candidate was actually asked for on the
     // Candidate Portal (varies: 3 for Fresher, 6 for currently-working
     // Experienced, 7 for not-working Experienced). HR screens must use this
@@ -171,15 +249,31 @@ function setLocalDocumentStatus(identity, docName, patch) {
   updateSubmittedApplication(identity, { requiredDocuments: nextDocs });
 }
 
-const normalizeDocument = (d = {}) => ({
-  ...d,
-  id: d.id ?? d.documentId,
-  name: d.name ?? String(d.documentType || '').replaceAll('_', ' ').replace(/\b\w/g, (m) => m.toUpperCase()),
-  documentType: d.documentType,
-  fileName: d.fileName || '',
-  status: d.status || DOC_STATUS.PENDING,
-  data: d.data || (d.id ? `http://localhost:8080/upload/view/${d.id}` : ''),
-});
+const DOCUMENT_TYPE_LABELS = {
+  RESUME: 'Resume',
+  CURRENT_OFFERLETTER: 'Current Offer / Appointment Letter',
+  SALARY_SLIP: 'Latest Salary Slip',
+  PAN_CARD: 'PAN Card',
+  AADHAAR_CARD: 'Aadhaar Card',
+  UAN_PROOF: 'UAN Proof',
+  EXPERIENCE_LETTER: 'Experience Letter',
+  RELIEVING_LETTER: 'Relieving Letter',
+  PASSPORT: 'Passport',
+  VISA: 'Visa',
+};
+
+const normalizeDocument = (d = {}) => {
+  const id = d.id ?? d.documentId;
+  return {
+    ...d,
+    id,
+    name: d.name ?? DOCUMENT_TYPE_LABELS[d.documentType] ?? String(d.documentType || '').replaceAll('_', ' ').replace(/\b\w/g, (m) => m.toUpperCase()),
+    documentType: d.documentType,
+    fileName: d.fileName || '',
+    status: d.status || DOC_STATUS.PENDING,
+    data: d.data || (id ? `http://localhost:8080/upload/view/${id}` : ''),
+  };
+};
 
 const normalize = (c = {}) => {
   const profile = c.profile || {};
@@ -207,9 +301,18 @@ const normalize = (c = {}) => {
     profileStep: c.profileStep ?? profile.profileStep ?? 1,
     remarks: c.remarks ?? '',
     pan: c.pan ?? c.panNumber ?? review.panNumber ?? profile.panNumber,
-    aadhaar: c.aadhaar ?? c.aadhaarNumber ?? profile.aadhaarNumber,
+    aadhaar: c.aadhaar ?? c.aadhaarNumber ?? review.aadhaarNumber ?? profile.aadhaarNumber,
     uan: c.uan ?? c.uanNumber ?? review.uanNumber ?? employment.uanNumber,
     uanVerified: c.uanVerified ?? review.uanVerified ?? employment.uanVerified ?? false,
+    uanVerificationStatus: c.uanVerificationStatus ?? review.uanVerificationStatus ?? employment.uanVerificationStatus ?? (c.uanVerified ? "VERIFIED" : "PENDING"),
+    permanentAddress: buildPermanentAddress(c) || buildPermanentAddress(profile) || '',
+    currentResidentialAddress: buildCurrentAddress(c) || buildCurrentAddress(profile) || '',
+    emergencyContactNumber: c.emergencyContactNumber ?? profile.emergencyContactNumber ?? '',
+    referenceNumber: c.referenceNumber ?? profile.referenceNumber ?? '',
+    currentLatitude: c.currentLatitude ?? profile.currentLatitude ?? '',
+    currentLongitude: c.currentLongitude ?? profile.currentLongitude ?? '',
+    houseSelfieUploaded: Boolean(c.houseSelfieUploaded ?? profile.houseSelfieUploaded),
+    currentAddressSource: c.currentAddressSource || profile.currentAddressSource || currentAddressSource(c) || currentAddressSource(profile),
     documents: documentsSource.map(normalizeDocument),
     review,
   };
@@ -244,12 +347,31 @@ export const allCandidates = async () => {
       list.map(async (candidate) => {
         const id = candidate.id ?? candidate.candidateId;
         if (!id) return candidate;
-        try {
-          const review = await api.reviewDocuments(id);
-          return { ...candidate, review, documents: review?.documents || candidate.documents || [] };
-        } catch {
-          return candidate;
-        }
+        const [review, permanentContact, currentContact] = await Promise.all([
+          api.reviewDocuments(id).catch(() => null),
+          api.hrPermanentAddress(id).catch(() => null),
+          api.hrCurrentAddress(id).catch(() => null),
+        ]);
+        const contact = { ...(permanentContact || {}), ...(currentContact || {}) };
+        const permanentAddress = permanentContact
+          ? [permanentContact.permanentAddressLine1, permanentContact.permanentAddressLine2, permanentContact.permanentAreaLocality, permanentContact.permanentCity, permanentContact.permanentDistrict, permanentContact.permanentState, permanentContact.permanentPincode, permanentContact.permanentCountry].filter(Boolean).join(', ')
+          : '';
+        return {
+          ...candidate,
+          review,
+          contact,
+          documents: review?.documents || candidate.documents || [],
+          permanentAddress: permanentAddress || buildPermanentAddress(candidate),
+          currentResidentialAddress: buildCurrentAddress(contact || {}) || buildCurrentAddress(candidate),
+          emergencyContactNumber: contact?.emergencyContactNumber || candidate.emergencyContactNumber,
+          referenceNumber: contact?.referralContactNumber || candidate.referenceNumber,
+          currentLatitude: contact?.currentLatitude ?? candidate.currentLatitude,
+          currentLongitude: contact?.currentLongitude ?? candidate.currentLongitude,
+          houseSelfieUploaded: contact?.currentAddressPhotoAvailable ?? candidate.houseSelfieUploaded ?? false,
+          currentAddressSource: hasCoordinates(contact || {}) ? 'GPS' : (candidate.currentAddressSource || currentAddressSource(candidate)),
+          backendSubmissionReady: Boolean(contact?.currentAddressPhotoAvailable || buildCurrentAddress(contact || {})),
+          backendContactChecked: true,
+        };
       })
     );
 
@@ -288,8 +410,27 @@ export const allCandidates = async () => {
       // required — prefer whatever the candidate actually selected on the
       // Portal (local) if the backend didn't send it.
       candidateType: candidate.candidateType || local.candidateType,
+      appliedRole: candidate.appliedRole || local.appliedRole,
+      skills: Array.isArray(candidate.skills) && candidate.skills.length ? candidate.skills : (local.skills || []),
+      // The HR summary endpoint can return blank identity-number fields even
+      // when the candidate already entered them during onboarding. Preserve
+      // backend values when present, otherwise enrich the row from the
+      // submitted candidate application so PAN/Aadhaar/UAN are visible.
+      pan: candidate.pan || candidate.panNumber || local.pan || local.panNumber || '',
+      aadhaar: candidate.aadhaar || candidate.aadhaarNumber || local.aadhaar || local.aadhaarNumber || '',
+      uan: candidate.uan || candidate.uanNumber || local.uan || local.uanNumber || '',
+      uanVerified: candidate.uanVerified ?? local.uanVerified ?? false,
+      uanVerificationStatus: candidate.uanVerificationStatus || local.uanVerificationStatus || (local.uanVerified ? 'VERIFIED' : 'PENDING'),
       employmentStatus: candidate.employmentStatus || local.employmentStatus,
       currentlyEmployed: candidate.currentlyEmployed || local.currentlyEmployed,
+      permanentAddress: buildPermanentAddress(candidate) || buildPermanentAddress(local) || '',
+      currentResidentialAddress: buildCurrentAddress(candidate) || buildCurrentAddress(local) || '',
+      emergencyContactNumber: candidate.emergencyContactNumber || local.emergencyContactNumber || '',
+      referenceNumber: candidate.referenceNumber || local.referenceNumber || '',
+      currentLatitude: candidate.currentLatitude ?? local.currentLatitude ?? '',
+      currentLongitude: candidate.currentLongitude ?? local.currentLongitude ?? '',
+      houseSelfieUploaded: candidate.houseSelfieUploaded ?? local.houseSelfieUploaded ?? false,
+      currentAddressSource: candidate.currentAddressSource || currentAddressSource(candidate) || local.currentAddressSource || currentAddressSource(local),
     };
   });
 
@@ -305,22 +446,96 @@ export const allCandidates = async () => {
 
 export const findCandidate = async (id) => {
   if (!id) throw new Error('Candidate ID is missing.');
-  const local = findLocalCandidateById(id);
+  const localById = findLocalCandidateById(id);
   try {
-    const [details, review] = await Promise.all([
+    const [details, review, candidateListResult, permanentContact, currentContact] = await Promise.all([
       api.candidate(id),
       api.reviewDocuments(id).catch(() => null),
+      api.candidates().catch(() => null),
+      api.hrPermanentAddress(id).catch(() => null),
+      api.hrCurrentAddress(id).catch(() => null),
     ]);
+    const contact = { ...(permanentContact || {}), ...(currentContact || {}) };
     if (!details) throw new Error('Candidate not found on backend.');
-    return normalize({ ...details, candidateId: Number(id), review, documents: review?.documents || details?.documents || [] });
+
+    const candidateList = Array.isArray(candidateListResult)
+      ? candidateListResult
+      : Array.isArray(candidateListResult?.content)
+        ? candidateListResult.content
+        : Array.isArray(candidateListResult?.candidates)
+          ? candidateListResult.candidates
+          : Array.isArray(candidateListResult?.items)
+            ? candidateListResult.items
+            : [];
+    const summaryCandidate = candidateList.find(
+      (candidate) => String(candidate.id ?? candidate.candidateId ?? '') === String(id)
+    );
+
+    const normalized = normalize({
+      ...(summaryCandidate || {}),
+      ...details,
+      candidateId: Number(id),
+      // Preserve skills from the HR candidate-list response when the detail
+      // endpoint omits them. The detail response still wins for all fields it
+      // actually returns.
+      skills: details.skills
+        ?? details.technicalSkills
+        ?? details.selectedSkills
+        ?? details.profile?.skills
+        ?? details.profile?.technicalSkills
+        ?? summaryCandidate?.skills
+        ?? summaryCandidate?.technicalSkills
+        ?? summaryCandidate?.selectedSkills,
+      review,
+      documents: review?.documents || details?.documents || [],
+    });
+
+    // Candidate profile/detail endpoints may omit technical skills even though
+    // they were selected and submitted from the Candidate Welcome page.
+    // Match the submitted/local application by id or email and use its skills
+    // only when the backend detail did not return any, so backend data remains
+    // the source of truth whenever it is available.
+    const localByEmail = getLocalCandidateList().find(
+      (candidate) => String(candidate.email || '').toLowerCase() === String(normalized.email || '').toLowerCase()
+    );
+    const local = localById || localByEmail;
+
+    if ((!Array.isArray(normalized.skills) || normalized.skills.length === 0) && Array.isArray(local?.skills)) {
+      normalized.skills = local.skills;
+    }
+
+    // Candidate detail/review responses can omit these values even though
+    // they were captured on the Candidate Welcome page. Use the matching
+    // submitted application only as a fallback; non-empty backend data still
+    // remains authoritative.
+    normalized.pan = normalized.pan || normalized.panNumber || local?.pan || local?.panNumber || '';
+    normalized.aadhaar = normalized.aadhaar || normalized.aadhaarNumber || local?.aadhaar || local?.aadhaarNumber || '';
+    normalized.uan = normalized.uan || normalized.uanNumber || local?.uan || local?.uanNumber || '';
+    normalized.uanVerified = normalized.uanVerified ?? local?.uanVerified ?? false;
+    normalized.uanVerificationStatus = normalized.uanVerificationStatus || local?.uanVerificationStatus || (normalized.uanVerified ? 'VERIFIED' : 'PENDING');
+    normalized.permanentAddress = buildPermanentAddress(normalized) || buildPermanentAddress(local || {}) || '';
+    normalized.currentResidentialAddress = buildCurrentAddress(normalized) || buildCurrentAddress(local || {}) || '';
+    normalized.emergencyContactNumber = normalized.emergencyContactNumber || local?.emergencyContactNumber || '';
+    normalized.referenceNumber = normalized.referenceNumber || local?.referenceNumber || '';
+    normalized.currentLatitude = normalized.currentLatitude ?? local?.currentLatitude ?? '';
+    normalized.currentLongitude = normalized.currentLongitude ?? local?.currentLongitude ?? '';
+    normalized.houseSelfieUploaded = contact?.currentAddressPhotoAvailable ?? normalized.houseSelfieUploaded ?? local?.houseSelfieUploaded ?? false;
+    normalized.currentAddressSource = hasCoordinates(contact || {}) ? 'GPS' : (normalized.currentAddressSource || currentAddressSource(normalized) || local?.currentAddressSource || currentAddressSource(local || {}));
+    if (contact) {
+      normalized.permanentAddress = buildPermanentAddress(contact) || normalized.permanentAddress;
+      normalized.currentResidentialAddress = buildCurrentAddress(contact) || normalized.currentResidentialAddress;
+      normalized.emergencyContactNumber = contact.emergencyContactNumber || normalized.emergencyContactNumber;
+      normalized.referenceNumber = contact.referralContactNumber || normalized.referenceNumber;
+      normalized.currentLatitude = contact.currentLatitude ?? normalized.currentLatitude;
+      normalized.currentLongitude = contact.currentLongitude ?? normalized.currentLongitude;
+    }
+
+    return normalized;
   } catch {
-    if (!local) throw new Error('Candidate not found.');
-    return local;
+    if (!localById) throw new Error('Candidate not found.');
+    return localById;
   }
 };
-
-const makeLocalId = () =>
-  `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
 export async function addCandidate(candidate) {
   const normalized = {
@@ -329,7 +544,6 @@ export async function addCandidate(candidate) {
     appliedRole: candidate.appliedRole || candidate.role || 'Candidate',
     candidateType: String(candidate.candidateType || candidate.experience || 'FRESHER').toUpperCase().includes('EXPER') ? 'EXPERIENCED' : 'FRESHER',
   };
-
   try {
     await api.candidateRegister({
       username: normalized.fullName,
@@ -339,22 +553,9 @@ export async function addCandidate(candidate) {
       appliedRole: normalized.appliedRole,
       candidateType: normalized.candidateType,
     });
-    // Backend accepted it, but the HR "candidates" list only reflects the
-    // backend after a real page reload/fetch. Also mirror it into
-    // localStorage right away so it shows up immediately and repeated adds
-    // never silently disappear if the backend list endpoint lags behind.
-    try {
-      await saveLocalCandidate({ ...normalized, id: normalized.id || makeLocalId(), emailVerified: true }, candidate.password || 'Verify@123');
-    } catch {
-      // Non-fatal: backend save already succeeded.
-    }
     return normalized;
   } catch {
-    // No backend reachable (or it rejected the request) — always fall back
-    // to localStorage so the candidate is still saved and visible, and so
-    // this works the same way every time, no matter how many candidates
-    // are added.
-    return saveLocalCandidate({ ...normalized, id: makeLocalId(), emailVerified: true }, candidate.password || 'Verify@123');
+    return saveLocalCandidate({ ...normalized, id: `local-${Date.now()}`, emailVerified: true }, candidate.password || 'Verify@123');
   }
 }
 
@@ -530,8 +731,27 @@ export async function openHrCandidateDocument(doc) {
   }
   const id = doc?.id || doc?.documentId;
   if (!id) throw new Error('Document ID is missing.');
-  const blob = await api.reviewDocumentBlob(id);
-  const url = URL.createObjectURL(blob);
-  window.open(url, '_blank', 'noopener,noreferrer');
-  window.setTimeout(() => URL.revokeObjectURL(url), 60000);
+
+  // Open the preview tab immediately from the click event. Opening only after
+  // awaiting the authenticated blob request is blocked by some browsers.
+  const previewWindow = window.open('about:blank', '_blank');
+  try {
+    const blob = await api.reviewDocumentBlob(id);
+    const url = URL.createObjectURL(blob);
+    if (previewWindow) {
+      previewWindow.location.href = url;
+    } else {
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.target = '_blank';
+      anchor.rel = 'noopener noreferrer';
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+    }
+    window.setTimeout(() => URL.revokeObjectURL(url), 60000);
+  } catch (error) {
+    previewWindow?.close();
+    throw error;
+  }
 }

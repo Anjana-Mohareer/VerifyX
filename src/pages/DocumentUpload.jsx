@@ -90,7 +90,7 @@ export default function DocumentUpload({ mode = "admin" }) {
       const items = await allCandidates();
       setCandidateItems(Array.isArray(items) ? items : []);
     } catch (err) {
-      setError(err.message || "Unable to load candidates.");
+      setError(err.message || "Unable To Load Candidates.");
       setCandidateItems([]);
     } finally {
       setLoading(false);
@@ -104,7 +104,7 @@ export default function DocumentUpload({ mode = "admin" }) {
       setError("");
       try {
         if (mode === "candidate") {
-          if (!session?.id) throw new Error("Candidate session was not found. Please log in again.");
+          if (!session?.id) throw new Error("Candidate Session Was Not Found. Please Login Again.");
           const candidate = await findCandidate(session.id);
           if (active) setC(candidate || null);
         } else {
@@ -112,7 +112,7 @@ export default function DocumentUpload({ mode = "admin" }) {
           if (active) setCandidateItems(Array.isArray(items) ? items : []);
         }
       } catch (err) {
-        if (active) setError(err.message || "Unable to load documents.");
+        if (active) setError(err.message || "Unable To Load Documents.");
       } finally {
         if (active) setLoading(false);
       }
@@ -130,7 +130,7 @@ export default function DocumentUpload({ mode = "admin" }) {
     if (localStorage.getItem(alertKey)) return;
     localStorage.setItem(alertKey, "shown");
     alert(
-      `Document Alert: Please upload the following required documents:
+      `Document Alert: Please Upload The Following Required Documents:
 
 • ${missing.join("\n• ")}`
     );
@@ -164,12 +164,12 @@ export default function DocumentUpload({ mode = "admin" }) {
 
     const rule = getDocumentRule(name);
     if (!isAcceptedFile(file, rule)) {
-      alert(`${name} accepts ${rule.label} only. Please select the required file format.`);
+      alert(`${name} Accepts ${rule.label} Only. Please Select The Required File Format.`);
       return;
     }
 
     if (file.size > rule.maxMb * 1024 * 1024) {
-      alert(`${name} must be ${rule.maxMb} MB or smaller.`);
+      alert(`${name} Must Be ${rule.maxMb} MB or Smaller.`);
       return;
     }
 
@@ -177,13 +177,13 @@ export default function DocumentUpload({ mode = "admin" }) {
     const existingStatus = getDocStatus(existingDoc);
 
     if (existingStatus === DOC_STATUS.VERIFIED) {
-      alert("This document is already verified by HR. You cannot re-upload it.");
+      alert("This Document Is Already Verified By HR. You Cannot Re-Upload It.");
       return;
     }
 
     if (existingDoc && existingStatus !== DOC_STATUS.REJECTED) {
       const confirmReplace = window.confirm(
-        "This document is already uploaded and pending review. Do you want to replace it?"
+        "This Document Is Already Uploaded And Pending Review. Do You Want To Replace It?"
       );
       if (!confirmReplace) return;
     }
@@ -196,10 +196,10 @@ export default function DocumentUpload({ mode = "admin" }) {
         reUpload: existingStatus === DOC_STATUS.REJECTED,
       });
       setC((current) => ({ ...current, documents }));
-      alert(`${name} uploaded successfully.`);
+      alert(`${name} Uploaded Successfully.`);
     } catch (err) {
-      setError(err.message || `Unable to upload ${name}.`);
-      alert(err.message || `Unable to upload ${name}.`);
+      setError(err.message || `Unable To Upload ${name}.`);
+      alert(err.message || `Unable To Upload ${name}.`);
     }
   };
 
@@ -215,9 +215,9 @@ export default function DocumentUpload({ mode = "admin" }) {
 
     if (missingDocs.length > 0) {
       const confirmSubmit = window.confirm(
-        `Some required documents are missing:\n\n${missingDocs.join(
+        `Some Required Documents Are Missing:\n\n${missingDocs.join(
           "\n"
-        )}\n\nDo you still want to submit?`
+        )}\n\nDo You Still Want To Submit?`
       );
 
       if (!confirmSubmit) return;
@@ -232,10 +232,10 @@ export default function DocumentUpload({ mode = "admin" }) {
         updatedAt: new Date().toISOString(),
       });
       setC((current) => ({ ...current, ...updatedCandidate, documents: current.documents }));
-      alert("Documents submitted successfully to HR/Admin.");
+      alert("Documents Submitted Successfully To HR/Admin.");
     } catch (err) {
-      setError(err.message || "Unable to submit documents.");
-      alert(err.message || "Unable to submit documents.");
+      setError(err.message || "Unable To Submit ocuments.");
+      alert(err.message || "Unable To Submit Documents.");
     }
   };
 
@@ -276,11 +276,11 @@ export default function DocumentUpload({ mode = "admin" }) {
                     try {
                       await openCandidateDocument(found);
                     } catch (err) {
-                      alert(err.message || "Unable to open document.");
+                      alert(err.message || "Unable To Open Document.");
                     }
                   }}
                 >
-                  View uploaded file
+                  View Uploaded File
                 </button>
               )}
             </>
@@ -293,7 +293,7 @@ export default function DocumentUpload({ mode = "admin" }) {
           )}
 
           {isVerified && (
-            <p className="muted small-text">Verified documents are locked.</p>
+            <p className="muted small-text">Verified Documents Are Locked.</p>
           )}
         </div>
 
@@ -312,28 +312,28 @@ export default function DocumentUpload({ mode = "admin" }) {
     try {
       await verifyCandidateDocument(candidateId, doc);
       await refreshCandidates();
-      alert(`${doc.name || doc.documentType} verified successfully.`);
+      alert(`${doc.name || doc.documentType} Verified Successfully.`);
     } catch (err) {
-      alert(err.message || "Unable to verify document.");
+      alert(err.message || "Unable To Verify Document.");
     }
   };
 
   const handleRejectDocument = async (candidateId, doc) => {
     const docName = doc.name || doc.documentType;
-    const reason = window.prompt(`Enter rejection reason for ${docName}:`);
+    const reason = window.prompt(`Enter Rejection Reason For ${docName}:`);
     if (reason === null) return;
 
     if (!reason.trim()) {
-      alert("Please enter a rejection reason.");
+      alert("Please Enter A Rejection Reason.");
       return;
     }
 
     try {
       await rejectCandidateDocument(candidateId, doc, reason.trim());
       await refreshCandidates();
-      alert(`${docName} rejected. Candidate can re-upload only this document.`);
+      alert(`${docName} Rejected. Candidate Can Re-Upload Only This Document.`);
     } catch (err) {
-      alert(err.message || "Unable to reject document.");
+      alert(err.message || "Unable To Reject Document.");
     }
   };
 
@@ -356,17 +356,17 @@ export default function DocumentUpload({ mode = "admin" }) {
             <div>
               <h1>Upload Documents</h1>
               <p className="muted">
-                Upload the documents required for candidate verification.
+                Upload The Documents Required For Candidate Verification.
               </p>
             </div>
           </div>
 
           {loading ? (
-            <section className="panel">Loading candidate documents...</section>
+            <section className="panel">Loading Candidate Documents...</section>
           ) : error ? (
-            <section className="panel"><b>Unable to load documents:</b> {error}</section>
+            <section className="panel"><b>Unable To Load Documents:</b> {error}</section>
           ) : !c ? (
-            <section className="panel">Candidate not found. Please log in again.</section>
+            <section className="panel">Candidate Not Found. Please Login Again.</section>
           ) : (
             <section className="panel document-panel">
               <div className="document-panel-header">
@@ -377,7 +377,7 @@ export default function DocumentUpload({ mode = "admin" }) {
                       : "Fresher Candidate Documents"}
                   </h2>
                   <p className="muted">
-                    {uploadedCount} of {docs.length} documents uploaded
+                    {uploadedCount} Of {docs.length} Documents Uploaded
                   </p>
                 </div>
 
@@ -386,14 +386,14 @@ export default function DocumentUpload({ mode = "admin" }) {
 
               <div className="employment-summary-card">
                 <p>
-                  <b>Document re-upload rule:</b> Only documents rejected by HR can be re-uploaded. Verified documents are locked.
+                  <b>Document Re-Upload Rule:</b> Only Documents Rejected By HR Can Be Re-Uploaded. Verified Documents Are Locked.
                 </p>
               </div>
 
               {getMissingDocuments(c).length > 0 && (
                 <div className="missing-document-alert" role="alert">
-                  <strong>⚠ Missing required documents</strong>
-                  <p>Please upload these files before submission:</p>
+                  <strong>⚠ Missing Required Documents</strong>
+                  <p>Please Upload These Files Before Submission:</p>
                   <ul>{getMissingDocuments(c).map((name) => <li key={name}>{name}</li>)}</ul>
                 </div>
               )}
@@ -404,7 +404,7 @@ export default function DocumentUpload({ mode = "admin" }) {
                     <b>Main Verification Document:</b> Offer Letter
                   </p>
                   <p className="muted">
-                    Required files are selected automatically from the candidate's employment status. Currently working candidates provide current-employment proof; candidates who are not working provide previous-employment and exit documents.
+                    Required Files Are Selected Automatically From The Candidate's Employment Status. Currently Working Candidates Provide Current-Employment Proof; Candidates Who Are Not Working Provide Previous-Employment And Exit Documents.
                   </p>
                 </div>
               )}
@@ -413,7 +413,7 @@ export default function DocumentUpload({ mode = "admin" }) {
                 <div className="doc-section-header">
                   <div>
                     <h3>Required Documents</h3>
-                    <p className="muted">Upload clear PDF, JPG, or PNG files.</p>
+                    <p className="muted">Upload Clear PDF, JPG, Or PNG Files.</p>
                   </div>
                 </div>
 
@@ -445,17 +445,17 @@ export default function DocumentUpload({ mode = "admin" }) {
           <div>
             <h1>Uploaded Candidate Documents</h1>
             <p className="muted">
-              HR can verify Correct Documents or Reject Incorrect Documents with a Reason.
+              HR Can Verify Correct Documents Or Reject Incorrect Documents With A Reason.
             </p>
           </div>
         </div>
 
         {loading ? (
-          <section className="panel">Loading candidate documents...</section>
+          <section className="panel">Loading Candidate Documents...</section>
         ) : error ? (
-          <section className="panel"><b>Unable to load documents:</b> {error}</section>
+          <section className="panel"><b>Unable To Load Documents:</b> {error}</section>
         ) : totalRecords === 0 ? (
-          <section className="panel empty">No candidate documents uploaded yet.</section>
+          <section className="panel empty">No Candidate Documents Uploaded Yet.</section>
         ) : (
           <>
             {paginatedCandidates.map((candidate) => {
@@ -487,7 +487,7 @@ export default function DocumentUpload({ mode = "admin" }) {
 
                   {getMissingDocuments(candidate).length > 0 && (
                     <div className="missing-document-alert" role="alert">
-                      <strong>⚠ Candidate has missing documents</strong>
+                      <strong>⚠ Candidate Has Missing Documents</strong>
                       <p>{getMissingDocuments(candidate).join(", ")}</p>
                     </div>
                   )}
@@ -513,12 +513,12 @@ export default function DocumentUpload({ mode = "admin" }) {
                                 <p className="doc-reject-reason"><b>Reason:</b> {doc.rejectionReason}</p>
                               )}
                               {isVerified && doc.verifiedAt && (
-                                <p className="muted small-text">Verified by {doc.verifiedBy || "HR"} on {new Date(doc.verifiedAt).toLocaleString()}</p>
+                                <p className="muted small-text">Verified By {doc.verifiedBy || "HR"} On {new Date(doc.verifiedAt).toLocaleString()}</p>
                               )}
                             </div>
 
                             <div className="doc-review-actions">
-                              <button className="btn" type="button" onClick={() => openCandidateDocument(doc).catch((err) => alert(err.message || "Unable to open document."))}>View</button>
+                              <button className="btn" type="button" onClick={() => openCandidateDocument(doc).catch((err) => alert(err.message || "Unable To Open Document."))}>View</button>
                               {!isVerified && (
                                 <button className="btn success" onClick={() => handleVerifyDocument(candidate.id, doc)}>
                                   Verify

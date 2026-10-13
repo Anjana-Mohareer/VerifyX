@@ -40,28 +40,6 @@ export const DOCS_FRESHER=['Resume','Offer Letter','Aadhaar Card','PAN Card'];
 export const DOCS_EXPERIENCED=['Resume','Aadhaar','PAN','Bank Details','UAN','Offer Letter 1','Offer Letter 2','Offer Letter 3','Relieving Letter','Experience Letter','Salary Slip 1','Salary Slip 2','Salary Slip 3','Previous Company ID'];
 export const MODULES=['Authentication','Candidate Management','Document Upload','Verification Workflow','Reports','Profile'];
 
-export const IT_ROLES = [
-  'Frontend Developer', 'React Developer', 'Angular Developer', 'Vue.js Developer', 'UI Developer',
-  'Backend Developer', 'Java Developer', 'Spring Boot Developer', '.NET Developer', 'C# Developer',
-  'Python Developer', 'Node.js Developer', 'PHP Developer', 'Ruby on Rails Developer', 'Go Developer',
-  'Full Stack Developer', 'MERN Stack Developer', 'MEAN Stack Developer', 'Software Engineer', 'Software Developer',
-  'Mobile App Developer', 'React Native Developer', 'Flutter Developer', 'Android Developer', 'iOS Developer',
-  'QA Engineer', 'Manual Tester', 'Automation Test Engineer', 'SDET', 'Performance Test Engineer',
-  'DevOps Engineer', 'Site Reliability Engineer (SRE)', 'Cloud Engineer', 'AWS Engineer', 'Azure Engineer',
-  'GCP Engineer', 'Kubernetes Engineer', 'Docker Engineer', 'Build & Release Engineer', 'Linux Administrator',
-  'System Administrator', 'Network Engineer', 'Network Administrator', 'IT Support Engineer', 'Technical Support Engineer',
-  'Database Administrator (DBA)', 'SQL Developer', 'Data Engineer', 'Data Analyst', 'Business Intelligence Developer',
-  'Power BI Developer', 'Tableau Developer', 'Data Scientist', 'Machine Learning Engineer', 'AI Engineer',
-  'Generative AI Engineer', 'NLP Engineer', 'Computer Vision Engineer', 'MLOps Engineer', 'Prompt Engineer',
-  'Cyber Security Analyst', 'Security Engineer', 'SOC Analyst', 'Penetration Tester', 'Ethical Hacker',
-  'IAM Engineer', 'Application Security Engineer', 'Cloud Security Engineer', 'Security Architect',
-  'UI/UX Designer', 'Product Designer', 'Web Designer', 'Graphic Designer', 'Technical Writer',
-  'Business Analyst', 'System Analyst', 'Product Manager - IT', 'Project Manager - IT', 'Scrum Master',
-  'ERP Consultant', 'SAP Consultant', 'Salesforce Developer', 'Salesforce Administrator', 'ServiceNow Developer',
-  'RPA Developer', 'Blockchain Developer', 'Game Developer', 'Embedded Software Engineer', 'IoT Engineer',
-  'Solution Architect', 'Software Architect', 'Enterprise Architect', 'Technical Lead', 'Engineering Manager',
-  'IT Recruiter', 'Other IT Role'
-];
 
 const packs = {
   frontend: { skills:['HTML5','CSS3','JavaScript','TypeScript','React.js','Responsive Web Design','REST API Development','Web Accessibility'], tools:['Git','GitHub','VS Code','Postman','Figma'] },
