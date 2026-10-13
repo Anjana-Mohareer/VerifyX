@@ -1,4 +1,4 @@
-import { useParams } from "react-router-dom";
+import { useLocation, useParams } from "react-router-dom";
 import { useEffect, useState } from "react";
 import Sidebar from "../components/Sidebar";
 import {
@@ -6,11 +6,11 @@ import {
   findCandidate,
   rejectCandidateDocument,
   verifyCandidateDocument,
-  verifyCandidateUan,
   openHrCandidateDocument,
 } from "../services/employeeService";
 import { updateStatus } from "../services/verificationService";
-import { sendStatusMail } from "../services/mailService";
+import { sendInterviewInvitationMail, sendStatusMail } from "../services/mailService";
+import { addNotification } from "../services/notificationService";
 import "./DashboardPro.css";
 
 function getDocStatus(doc) {
@@ -32,10 +32,30 @@ const CURRENT_EMPLOYEE_REQUIRED_DOCUMENTS = [
   "Resume", "Aadhaar Card", "PAN Card", "Current Offer / Appointment Letter",
   "Latest Salary Slip", "UAN Proof",
 ];
+const OPTIONAL_TRAVEL_DOCUMENTS = ['Passport', 'Visa'];
+
 const NOT_WORKING_REQUIRED_DOCUMENTS = [
   "Resume", "Aadhaar Card", "PAN Card", "Experience Letter",
   "Relieving Letter", "Last Salary Slip", "UAN Proof",
 ];
+
+function canonicalDocumentName(name = '') {
+  const value = String(name).toLowerCase().replace(/[^a-z0-9]+/g, '');
+  if (value.includes('salaryslip')) return 'salaryslip';
+  if (value.includes('offer') && value.includes('letter')) return 'offerletter';
+  if (value.includes('experienceletter')) return 'experienceletter';
+  if (value.includes('relievingletter')) return 'relievingletter';
+  if (value.includes('aadhaar')) return 'aadhaarcard';
+  if (value.includes('pan')) return 'pancard';
+  if (value.includes('uan')) return 'uanproof';
+  if (value.includes('resume')) return 'resume';
+  return value;
+}
+
+function findUploadedDocument(documents = [], requiredName = '') {
+  const wanted = canonicalDocumentName(requiredName);
+  return documents.find((doc) => canonicalDocumentName(doc?.name || doc?.documentType) === wanted);
+}
 
 function getRequiredDocuments(candidate) {
   // Prefer the exact document list the candidate was actually asked for on
@@ -60,7 +80,7 @@ function getMissingDocuments(candidate) {
 }
 
 function isDocumentVerified(candidate, name) {
-  const doc = (candidate?.documents || []).find((item) => item.name === name);
+  const doc = findUploadedDocument(candidate?.documents || [], name);
   return doc && getDocStatus(doc) === DOC_STATUS.VERIFIED;
 }
 
@@ -86,6 +106,10 @@ function formatFieldLabel(key) {
     uanVerifiedBy: "UAN Verified By",
     uanVerifiedAt: "UAN Verified At",
     lastCtc: "Last CTC",
+    permanentAddress: "Permanent Address",
+    currentResidentialAddress: "Current Residential Address",
+    emergencyContactNumber: "Emergency Contact Number",
+    referenceNumber: "Reference Number",
   };
 
   if (labels[key]) return labels[key];
@@ -157,12 +181,27 @@ function ObjectDetailsSection({ title, data, exclude = [] }) {
   );
 }
 
+function toDateTimeInput(date) {
+  const pad = (value) => String(value).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+function defaultInterviewSlots() {
+  const base = new Date(); base.setSeconds(0, 0); base.setDate(base.getDate() + 1); base.setHours(11, 0, 0, 0);
+  const second = new Date(base); second.setDate(second.getDate() + 1); second.setHours(14, 0, 0, 0);
+  const third = new Date(base); third.setDate(third.getDate() + 2); third.setHours(16, 0, 0, 0);
+  return [base, second, third].map(toDateTimeInput);
+}
+
 export default function EmployeeDetails() {
   const { id } = useParams();
+  const location = useLocation();
   const [c, setC] = useState(null);
   const [remarks, setRemarks] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [showInterviewScheduler, setShowInterviewScheduler] = useState(false);
+  const [interviewSlots, setInterviewSlots] = useState(defaultInterviewSlots);
+  const [interviewSaving, setInterviewSaving] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -225,6 +264,12 @@ Ask the candidate to upload them.`
     );
   }, [c?.id, missingDocuments.join("|")]);
 
+  useEffect(() => {
+    if (!loading && new URLSearchParams(location.search).get('section') === 'documents') {
+      window.setTimeout(() => document.getElementById('candidate-documents')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
+    }
+  }, [loading, location.search]);
+
   if (loading) {
     return (
       <div className="app"><Sidebar /><main className="content"><section className="panel">Loading candidate details...</section></main></div>
@@ -267,17 +312,18 @@ Ask the candidate to upload them.`
       return;
     }
 
-    if (status === "Approved" && c.candidateType === "EXPERIENCED" && !c.uanVerified) {
-      alert("Please verify the candidate UAN number before approving the application.");
-      return;
-    }
-
     if (status === "Approved" && unverifiedCriticalDocuments.length > 0) {
       alert(
         `Cannot approve. HR must validate these critical documents:
 
 • ${unverifiedCriticalDocuments.join("\n• ")}`
       );
+      return;
+    }
+
+    if (status === "Approved") {
+      setInterviewSlots(defaultInterviewSlots());
+      setShowInterviewScheduler(true);
       return;
     }
 
@@ -300,6 +346,24 @@ Ask the candidate to upload them.`
     } finally {
       setLoading(false);
     }
+  };
+
+  const confirmInterviewSchedule = async () => {
+    const cleanSlots = interviewSlots.map((slot) => String(slot || '').trim()).filter(Boolean);
+    if (cleanSlots.length < 2) { alert('Please Provide At Least Two Interview Time Slots.'); return; }
+    if (cleanSlots.some((slot) => new Date(slot).getTime() <= Date.now())) { alert('Please Select Future Interview Time Slots.'); return; }
+    setInterviewSaving(true);
+    try {
+      await updateStatus(c.id, 'Approved', remarks, cleanSlots.map((slot) => slot.length === 16 ? `${slot}:00` : slot));
+      const updatedCandidate = await findCandidate(c.id).catch(() => ({ ...c, status: 'Approved' }));
+      const workflow = { interviewSlots: cleanSlots };
+      setC({ ...updatedCandidate, status: 'Approved' });
+      addNotification({ audience: 'CANDIDATE', recipient: updatedCandidate.email || c.email, type: 'BGV_CLEARED', applicationId: updatedCandidate.applicationId || c.applicationId || '', title: 'BGV Cleared - HR Discussion Invitation', message: 'Your background verification is cleared. Please open the HR Interview section and select one of the available time slots.' });
+      addNotification({ audience: 'HR', type: 'INTERVIEW_INVITED', applicationId: updatedCandidate.applicationId || c.applicationId || '', title: 'Candidate Invited For HR Discussion', message: `${updatedCandidate.fullName || c.fullName || 'Candidate'} has cleared BGV and received HR interview time-slot options.` });
+      // The backend sends the BGV invitation and calendar attachment when status is approved.
+      setShowInterviewScheduler(false);
+      alert('BGV Approved. HR Interview Time Slots Have Been Sent To The Candidate.');
+    } catch (statusError) { alert(statusError?.message || 'Unable To Schedule The HR Interview.'); } finally { setInterviewSaving(false); }
   };
 
   const handleVerifyDocument = async (doc) => {
@@ -330,25 +394,6 @@ Ask the candidate to upload them.`
     }
   };
 
-  const handleVerifyUan = async () => {
-    if (!c.uan) {
-      alert("UAN number is not available for this candidate.");
-      return;
-    }
-
-    if (!/^\d{12}$/.test(String(c.uan))) {
-      alert("UAN number must be exactly 12 digits before verification.");
-      return;
-    }
-
-    try {
-      await verifyCandidateUan(c.id);
-      setC(await findCandidate(c.id));
-      alert("UAN verified successfully by HR.");
-    } catch (err) {
-      alert(err?.message || "Unable to verify UAN.");
-    }
-  };
 
   return (
     <div className="app">
@@ -373,7 +418,7 @@ Ask the candidate to upload them.`
 
           <div className="skill-review-box">
             <h3>Candidate Skills</h3>
-            <p><b>Technical Skills:</b> {(c.skills || []).join(", ") || "No skills selected"}</p>
+            <p><b>Technical Skills:</b> <strong>{(c.skills || []).join(", ") || "No skills selected"}</strong></p>
           </div>
 
           <div className="details">
@@ -382,6 +427,8 @@ Ask the candidate to upload them.`
                 ![
                   "password", "documents", "softSkills", "languages", "profile", "review", "education", "employment",
                   "localOnly", "identity", "locked", "hrExtractionStatus", "requiredDocuments", "requiredDocumentNames", "skills",
+                  "address", "photo", "photoUrl", "profilePhoto", "profilePhotoUrl", "imageUrl",
+                  "uanVerificationStatus", "uanVerifiedBy", "uanVerifiedAt",
                 ].includes(k) &&
                 !isPlainObject(v) &&
                 !Array.isArray(v)
@@ -394,7 +441,17 @@ Ask the candidate to upload them.`
           </div>
         </section>
 
-        <section className="panel document-verification-panel">
+        <section className="panel">
+          <h2>Contact & Location Details</h2>
+          <div className="details">
+            <p><b>Permanent Address:</b> {c.permanentAddress || "Not Added"}</p>
+            <p><b>Current Residential Address:</b> {c.currentResidentialAddress || "Not Added"}</p>
+            <p><b>Emergency Contact Number:</b> {c.emergencyContactNumber || "Not Added"}</p>
+            <p><b>Reference Number:</b> {c.referenceNumber || "Optional / Not Added"}</p>
+          </div>
+        </section>
+
+        <section className="panel document-verification-panel" id="candidate-documents">
           <div className="verification-subsection">
             <div className="doc-checklist-header">
               <div>
@@ -416,7 +473,7 @@ Ask the candidate to upload them.`
 
             <ul className="doc-checklist-list">
               {allRequiredDocuments.map((name, index) => {
-                const uploaded = uploadedDocsList.find((doc) => doc.name === name);
+                const uploaded = findUploadedDocument(uploadedDocsList, name);
                 const status = uploaded ? getDocStatus(uploaded) : null;
                 const isVerified = status === DOC_STATUS.VERIFIED;
                 const isRejected = status === DOC_STATUS.REJECTED;
@@ -469,37 +526,33 @@ Ask the candidate to upload them.`
               })}
             </ul>
           </div>
+        </section>
 
+        <section className="panel document-verification-panel">
           <div className="verification-subsection">
-            <h3>UAN Verification</h3>
-            <div className="doc-checklist-row is-static">
-              <div className="doc-checklist-main">
-                <span className="doc-checklist-name">UAN Number: {c.uan || "Not provided"}</span>
-              </div>
-              <span className={`doc-checklist-badge ${c.uanVerified ? "verified" : "not-uploaded"}`}>
-                {c.uanVerified ? "Verified" : "Pending"}
-              </span>
-              <div className="doc-checklist-actions">
-                {c.uanVerified ? (
-                  c.uanVerifiedAt && (
-                    <span className="muted small-text">
-                      by {c.uanVerifiedBy || "HR"} on {new Date(c.uanVerifiedAt).toLocaleString()}
-                    </span>
-                  )
-                ) : (
-                  <button className="btn success small" onClick={handleVerifyUan}>
-                    Verify UAN
-                  </button>
-                )}
-              </div>
-            </div>
+            <div className="doc-checklist-header"><div><h3>Passport & Visa (Optional)</h3><p className="muted">These documents are optional and do not affect application completion.</p></div></div>
+            <ul className="doc-checklist-list">
+              {OPTIONAL_TRAVEL_DOCUMENTS.map((name, index) => {
+                const uploaded = findUploadedDocument(uploadedDocsList, name);
+                const status = uploaded ? getDocStatus(uploaded) : null;
+                return <li className={`doc-checklist-row ${uploaded ? 'is-submitted' : 'is-pending'}`} key={name}>
+                  <span className="doc-checklist-index">{index + 1}</span>
+                  <div className="doc-checklist-main"><span className="doc-checklist-name">{name}</span><small>{uploaded ? getStatusLabel(status) : 'Not uploaded'}</small></div>
+                  {uploaded && <div className="doc-checklist-actions">
+                    <button className="doc-action-btn view" type="button" onClick={()=>openHrCandidateDocument(uploaded)}>View</button>
+                    {status !== DOC_STATUS.VERIFIED && <button className="doc-action-btn verify" type="button" onClick={()=>handleVerifyDocument(uploaded)}>Verify</button>}
+                    {status !== DOC_STATUS.REJECTED && <button className="doc-action-btn reject" type="button" onClick={()=>handleRejectDocument(uploaded)}>Reject</button>}
+                  </div>}
+                </li>;
+              })}
+            </ul>
           </div>
         </section>
 
         <ObjectDetailsSection
           title="Profile Details"
           data={c.profile}
-          exclude={["password", "documents"]}
+          exclude={["password", "documents", "address", "uanVerificationStatus", "uanVerifiedBy", "uanVerifiedAt"]}
         />
 
         <ObjectDetailsSection
@@ -522,7 +575,7 @@ Ask the candidate to upload them.`
           <h2>Application Verification Action</h2>
 
           <textarea
-            placeholder="Remarks for candidate"
+            placeholder="Remarks for Candidate"
             value={remarks}
             onChange={(e) => setRemarks(e.target.value)}
           />
@@ -542,6 +595,7 @@ Ask the candidate to upload them.`
           </div>
         </section>
       </main>
+      {showInterviewScheduler && <div className="hr-interview-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="hr-interview-scheduler-title"><section className="hr-interview-modal"><header><div><span>BGV Completed</span><h2 id="hr-interview-scheduler-title">Schedule HR Interview</h2><p>{c.fullName} Is Approved For The Next Round. Add The Available Interview Time Slots Below.</p></div><button type="button" aria-label="Close" onClick={() => setShowInterviewScheduler(false)}>×</button></header><div className="hr-interview-modal-body"><div className="hr-interview-candidate-summary"><strong>{c.fullName}</strong><span>{c.email}</span><small>{c.appliedRole || 'Applied Role Not Added'}</small></div><div className="hr-slot-grid">{interviewSlots.map((slot, index) => <label key={index}><span>Time Slot {index + 1}</span><input type="datetime-local" value={slot} min={toDateTimeInput(new Date())} onChange={(event) => setInterviewSlots((items) => items.map((item, itemIndex) => itemIndex === index ? event.target.value : item))} /></label>)}</div><button type="button" className="hr-add-slot-link" onClick={() => setInterviewSlots((items) => [...items, ''])}>+ Add Another Time Slot</button><p className="hr-interview-note">The Candidate Will Receive A BGV Approval Email Containing These Slots And Can Select One From The Candidate Portal. The Selected Slot Will Be Reported Back To HR.</p></div><footer><button type="button" className="btn secondary" disabled={interviewSaving} onClick={() => setShowInterviewScheduler(false)}>Cancel</button><button type="button" className="btn success" disabled={interviewSaving} onClick={confirmInterviewSchedule}>{interviewSaving ? 'Scheduling…' : 'Approve BGV & Send Slots'}</button></footer></section></div>}
     </div>
   );
 }

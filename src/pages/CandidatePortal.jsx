@@ -3,7 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import useAuth from '../hooks/useAuth';
 import { findLocalCandidate } from '../services/localStorage/storage';
 import { getApplication } from '../services/candidateApplicationService';
-import { getNotifications, markNotificationsRead } from '../services/notificationService';
+import { addNotification, getNotifications, markNotificationsRead } from '../services/notificationService';
+import { formatInterviewSlot, getCandidateInterviewWorkflow, selectHrInterviewSlot } from '../services/interviewWorkflowService';
+import { sendInterviewSlotSelectedMail } from '../services/mailService';
+import verifyXLogo from '../assets/verify-x-full-logo.png';
 import './CandidatePortal.css';
 
 const titleCase = (value='') => String(value).replaceAll('_',' ').toLowerCase().replace(/\b\w/g, (m)=>m.toUpperCase());
@@ -26,10 +29,12 @@ export default function CandidatePortal(){
   const [showApplication, setShowApplication] = useState(false);
   const [showProgress, setShowProgress] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [activeSection, setActiveSection] = useState('dashboard');
+  const [activeSection, setActiveSection] = useState('profile');
   const [notifications, setNotifications] = useState(() => getNotifications('CANDIDATE', session?.email));
   const [profilePhoto, setProfilePhoto] = useState('');
   const [photoMessage, setPhotoMessage] = useState('');
+  const [interviewWorkflow, setInterviewWorkflow] = useState(null);
+  const [selectingInterviewSlot, setSelectingInterviewSlot] = useState('');
 
   useEffect(() => {
     if (identity) setProfilePhoto(localStorage.getItem(`verifyx_candidate_photo_${identity}`) || '');
@@ -72,6 +77,18 @@ export default function CandidatePortal(){
     return () => { window.removeEventListener('verifyx-notifications-updated', refreshNotifications); window.removeEventListener('storage', refreshNotifications); };
   }, [session?.email]);
 
+  useEffect(() => {
+    const refreshInterview = () => getCandidateInterviewWorkflow(session?.email).then(setInterviewWorkflow).catch(err => console.error('Interview slots:', err));
+    refreshInterview(); window.addEventListener('verifyx-interview-workflow-updated', refreshInterview);
+    return () => window.removeEventListener('verifyx-interview-workflow-updated', refreshInterview);
+  }, [session?.email]);
+
+  const chooseInterviewSlot = async (slot) => {
+    if (!slot || selectingInterviewSlot) return; setSelectingInterviewSlot(slot);
+    try { const updated = await selectHrInterviewSlot(session?.email, slot); setInterviewWorkflow(updated); addNotification({ audience: 'HR', type: 'INTERVIEW_SLOT_SELECTED', applicationId: updated.applicationId || '', title: 'HR Interview Slot Selected', message: `${updated.fullName || 'Candidate'} selected ${formatInterviewSlot(slot)}. Please confirm/fix the interview from the HR Dashboard.` }); await sendInterviewSlotSelectedMail(updated, slot).catch(() => false); alert('Interview Time Slot Selected Successfully. HR Has Been Notified.'); }
+    catch (err) { alert(err?.message || 'Unable To Select The Interview Time Slot.'); } finally { setSelectingInterviewSlot(''); }
+  };
+
   const requiredNames = useMemo(()=>{
     if (!application) return [];
     if(Array.isArray(application?.requiredDocumentNames) && application.requiredDocumentNames.length) return application.requiredDocumentNames;
@@ -105,7 +122,7 @@ export default function CandidatePortal(){
     <header className="candidate-dashboard-header">
       <div className="candidate-header-left">
         <button className="candidate-menu-toggle" aria-label="Open candidate menu" aria-expanded={menuOpen} onClick={()=>setMenuOpen(true)}><span></span><span></span><span></span></button>
-        <div className="candidate-brand" onClick={()=>nav('/candidate')}><span>VX</span><div><b>Verify-X</b><small>MyCandidate</small></div></div>
+        <div className="candidate-brand" onClick={()=>nav('/candidate')}><img src={verifyXLogo} alt="VerifyX" /></div>
       </div>
       <div className="candidate-header-actions">{!submitted && <button className="candidate-quick-apply-header" onClick={quickApply}>Quick Apply</button>}<button className="candidate-link-btn" onClick={()=>setShowApplication(true)}>View Application</button><button className="candidate-logout-btn" onClick={signOut}>Logout</button></div>
     </header>
@@ -113,15 +130,14 @@ export default function CandidatePortal(){
     <div className={`candidate-menu-backdrop ${menuOpen?'open':''}`} onClick={()=>setMenuOpen(false)}></div>
     <aside className={`candidate-drawer ${menuOpen?'open':''}`} aria-hidden={!menuOpen}>
       <div className="candidate-drawer-head"><div className="candidate-drawer-avatar">{profilePhoto ? <img src={profilePhoto} alt="Candidate" /> : String(application.fullName || session?.name || 'C').charAt(0).toUpperCase()}</div><div><b>{application.fullName || session?.name || 'Candidate'}</b><span>{application.email || session?.email || ''}</span></div><button onClick={()=>setMenuOpen(false)} aria-label="Close candidate menu">×</button></div>
-      <nav className="candidate-drawer-nav">
-        <button className={activeSection==='dashboard'?'active':''} onClick={()=>openSection('dashboard')}><i>⌂</i><span><b>Dashboard</b><small>Application overview</small></span></button>
-        <button className={activeSection==='profile'?'active':''} onClick={()=>openSection('profile')}><i>👤</i><span><b>Profile Information</b><small>Personal, education & employment</small></span></button>
-        <button className={activeSection==='status'?'active':''} onClick={()=>openSection('status')}><i>◔</i><span><b>Application Status</b><small>Track HR review progress</small></span></button>
-        <button className={activeSection==='documents'?'active':''} onClick={()=>openSection('documents')}><i>▤</i><span><b>Documents</b><small>Uploaded and pending files</small></span></button>
-        <button onClick={()=>{setMenuOpen(false);setShowApplication(true)}}><i>⌕</i><span><b>View Application</b><small>Read submitted details</small></span></button>
-        <button className={activeSection==='notifications'?'active':''} onClick={()=>openSection('notifications')}><i>✉</i><span><b>Notifications</b><small>Email and application updates</small></span></button>
-        {!submitted && <button className="candidate-quick-apply-menu" onClick={quickApply}><i>⚡</i><span><b>Quick Apply</b><small>Finish profile, skills and documents</small></span></button>}
-        {!submitted && <button onClick={()=>nav('/candidate-welcome')}><i>✎</i><span><b>Continue Application</b><small>Resume your saved draft</small></span></button>}
+      <nav className="candidate-drawer-nav candidate-reference-nav">
+        <button className={activeSection==='profile'?'active':''} onClick={()=>openSection('profile')}><i>●</i><span><b>Profile</b><small>Candidate Profile Information</small></span></button>
+        <button className={activeSection==='documents'?'active':''} onClick={()=>openSection('documents')}><i>▤</i><span><b>Documents</b><small>Uploaded And Pending Files</small></span></button>
+        <button className={activeSection==='status'?'active':''} onClick={()=>openSection('status')}><i>▣</i><span><b>Applications</b><small>Track Application Status</small></span></button>
+        <button className={activeSection==='notifications'?'active':''} onClick={()=>openSection('notifications')}><i>♥</i><span><b>Notifications</b><small>Email And Application Updates</small></span></button>
+        <button className={activeSection==='dashboard'?'active':''} onClick={()=>openSection('dashboard')}><i>⚙</i><span><b>Dashboard</b><small>Application Overview</small></span></button>
+        <button onClick={()=>{setMenuOpen(false);setShowApplication(true)}}><i>⌕</i><span><b>View Application</b><small>Read Submitted Details</small></span></button>
+        {!submitted && <button className="candidate-quick-apply-menu" onClick={quickApply}><i>⚡</i><span><b>Continue Application</b><small>Resume Your Saved Draft</small></span></button>}
       </nav>
       <div className="candidate-drawer-footer"><button onClick={signOut}>↪ <span>Logout</span></button></div>
     </aside>
@@ -146,21 +162,24 @@ export default function CandidatePortal(){
         </section>
       </>}
 
-      {activeSection==='profile' && <section className="candidate-profile-card candidate-panel candidate-section-view" id="candidate-profile-information">
-        <div className="candidate-panel-head"><div><span>PROFILE INFORMATION</span><h2>Your candidate profile</h2></div><div className="candidate-profile-actions">{!submitted ? <button className="candidate-edit-profile-btn" onClick={()=>nav('/candidate-welcome')}>✎ Edit Profile</button> : <span className="candidate-profile-locked">🔒 Submitted profile locked</span>}</div></div>
-        <div className="candidate-profile-overview">
-          <div className="candidate-profile-photo-wrap"><div className="candidate-profile-avatar">{profilePhoto ? <img src={profilePhoto} alt={`${application.fullName || 'Candidate'} profile`} /> : String(application.fullName || session?.name || 'C').charAt(0).toUpperCase()}</div><label className="candidate-photo-edit" title="Upload profile photo">📷<input type="file" accept="image/jpeg,image/png" onChange={changeProfilePhoto} /></label></div>
-          <div className="candidate-profile-main"><h3>{application.fullName || session?.name || 'Candidate'}</h3><p>{application.appliedRole || session?.appliedRole || 'Role not selected'}</p><div className="candidate-profile-tags"><span>{application.candidateType || session?.candidateType || 'Candidate'}</span><span>{application.employmentStatus ? titleCase(application.employmentStatus) : 'Profile saved'}</span></div></div>
-          <div className="candidate-profile-contact"><small>Email</small><b>{application.email || session?.email || '—'}</b><small>Phone</small><b>{application.phone || application.mobile || session?.phone || '—'}</b></div>
+      {activeSection==='profile' && <section className="candidate-reference-profile candidate-section-view" id="candidate-profile-information">
+        <div className="candidate-profile-reference-hero">
+          <div className="candidate-profile-reference-copy"><span>Profile Information</span><h1>Your Candidate Profile</h1><p>Keep Your Profile Updated To Increase Your Chance.</p></div><div className="candidate-profile-reference-art" aria-hidden="true"><i></i><i></i><i></i></div>
+        </div>
+        <div className="candidate-profile-identity-card">
+          <div className="candidate-profile-photo-wrap candidate-reference-photo"><div className="candidate-profile-avatar">{profilePhoto ? <img src={profilePhoto} alt={`${application.fullName || 'Candidate'} Profile`} /> : String(application.fullName || session?.name || 'C').charAt(0).toUpperCase()}</div><label className="candidate-photo-edit" title="Upload Profile Photo">📷<input type="file" accept="image/jpeg,image/png" onChange={changeProfilePhoto} /></label></div>
+          <div className="candidate-profile-main candidate-reference-main"><h3>{application.fullName || session?.name || 'Candidate'}</h3><p>{application.appliedRole || session?.appliedRole || 'Role Not Selected'}</p><div className="candidate-profile-tags"><span>{titleCase(application.candidateType || session?.candidateType || 'Candidate')}</span><span className="saved-tag">✓ {application.employmentStatus ? titleCase(application.employmentStatus) : 'Profile Saved'}</span></div></div>
+          <div className="candidate-profile-actions candidate-reference-actions">{!submitted ? <button className="candidate-edit-profile-btn" onClick={()=>nav('/candidate-welcome')}>Edit Profile</button> : <span className="candidate-profile-locked">Submitted Profile Locked</span>}</div>
+          <div className="candidate-profile-contact candidate-reference-contact"><div><small>Email</small><b>{application.email || session?.email || '—'}</b></div><div><small>Phone No:</small><b>{application.phone || application.mobile || session?.phone || '—'}</b></div></div>
         </div>
         {photoMessage && <div className="candidate-photo-message">{photoMessage}</div>}
-        <div className="candidate-profile-details-grid">
-          <ProfileMini title="10th / SSLC" value={application.education10?.institution || application.tenth?.institution || application.tenth?.schoolName || 'Not added'} sub={application.education10?.passingYear || application.tenth?.passingYear || ''}/>
-          <ProfileMini title="12th / PUC" value={application.education12?.institution || application.twelfth?.institution || application.twelfth?.collegeName || 'Not added'} sub={application.education12?.passingYear || application.twelfth?.passingYear || ''}/>
-          <ProfileMini title="Degree" value={application.degree?.degree || application.degree?.institution || 'Not added'} sub={application.degree?.specialization || application.degree?.passingYear || ''}/>
-          <ProfileMini title="Master's" value={application.masters?.degree || application.master?.degree || application.masters?.institution || 'Optional / Not added'} sub={application.masters?.specialization || application.master?.specialization || ''}/>
-          <ProfileMini title="Current Employer" value={application.currentEmployer?.companyName || application.currentEmployerName || 'Not working / Not added'} sub={application.currentEmployer?.designation || application.currentDesignation || ''}/>
-          <ProfileMini title="Previous Employer" value={application.previousEmployer?.companyName || application.previousEmployerName || 'Not added'} sub={application.previousEmployer?.designation || application.previousDesignation || ''}/>
+        <div className="candidate-profile-details-grid candidate-reference-grid">
+          <ProfileMini icon="🎓" tone="blue" title="10th / SSLC" value={application.education10?.institution || application.tenth?.institution || application.tenth?.schoolName || 'Not Added'} sub={application.education10?.passingYear || application.tenth?.passingYear || ''}/>
+          <ProfileMini icon="▤" tone="violet" title="12th / PUC" value={application.education12?.institution || application.twelfth?.institution || application.twelfth?.collegeName || 'Not Added'} sub={application.education12?.passingYear || application.twelfth?.passingYear || ''}/>
+          <ProfileMini icon="✥" tone="green" title="Degree" value={application.degree?.degree || application.degree?.institution || 'Not Added'} sub={application.degree?.specialization || application.degree?.passingYear || ''}/>
+          <ProfileMini icon="🎓" tone="orange" title="Master's" value={application.masters?.degree || application.master?.degree || application.masters?.institution || 'Not Added'} sub={application.masters?.specialization || application.master?.specialization || ''}/>
+          <ProfileMini icon="▣" tone="purple" title="Current Employer" value={application.currentEmployer?.companyName || application.currentEmployerName || 'Not Added'} sub={application.currentEmployer?.designation || application.currentDesignation || ''}/>
+          <ProfileMini icon="♧" tone="cyan" title="Previous Employer" value={application.previousEmployer?.companyName || application.previousEmployerName || 'Not Added'} sub={application.previousEmployer?.designation || application.previousDesignation || ''}/>
         </div>
       </section>}
 
@@ -174,6 +193,8 @@ export default function CandidatePortal(){
         </div>
         {!submitted && <button className="candidate-primary-btn continue-btn" onClick={()=>nav('/candidate-welcome')}>Continue Application →</button>}
       </section>}
+
+      {activeSection==='profile' && interviewWorkflow && <section className="candidate-panel candidate-interview-panel candidate-section-view" id="candidate-hr-interview"><div className="candidate-panel-head"><div><span>HR INTERVIEW</span><h2>{interviewWorkflow.selectedSlot ? 'Interview Slot Confirmed' : 'Choose Your Interview Time'}</h2></div><strong className="candidate-interview-stage">{interviewWorkflow.finalDecision === 'APPROVED' ? 'Approved' : interviewWorkflow.interviewStatus === 'INTERVIEW_CONFIRMED' ? 'Confirmed' : interviewWorkflow.selectedSlot ? 'Awaiting HR Confirmation' : 'Action Required'}</strong></div><p className="candidate-interview-copy">Your Background Verification Is Complete. {interviewWorkflow.interviewStatus === 'INTERVIEW_CONFIRMED' ? 'HR Has Confirmed Your Interview At The Selected Time.' : interviewWorkflow.selectedSlot ? 'HR Has Received Your Selected Interview Time And Will Confirm The Interview.' : 'Select One Of The HR Interview Slots Below. Once Selected, HR Will Receive An Email Confirmation.'}</p><div className="candidate-interview-slots">{(interviewWorkflow.interviewSlots || []).map((slot) => <button type="button" key={slot.id} disabled={Boolean(interviewWorkflow.selectedSlot) || Boolean(selectingInterviewSlot)} className={interviewWorkflow.selectedSlot === slot.dateTime ? 'selected' : ''} onClick={() => chooseInterviewSlot(slot)}><span>{interviewWorkflow.selectedSlot === slot.dateTime ? '✓' : '◷'}</span><div><b>{formatInterviewSlot(slot)}</b><small>{interviewWorkflow.selectedSlot === slot.dateTime ? 'Selected Time Slot' : interviewWorkflow.selectedSlot ? 'Another Slot Was Selected' : 'Select This Time'}</small></div></button>)}</div>{interviewWorkflow.finalDecision === 'APPROVED' && <div className="candidate-interview-result approved"><b>HR Interview Approved</b><span>Your Profile Has Moved To The Offer-Letter Release Stage.</span></div>}</section>}
 
       {activeSection==='documents' && <section className="candidate-panel candidate-doc-panel candidate-section-view" id="candidate-documents">
         <div className="candidate-panel-head"><div><span>DOCUMENT CHECKLIST</span><h2>{pendingNames.length?'Items still needed':'Documents complete'}</h2></div><div className="candidate-doc-head-actions"><strong>{docPercent}%</strong>{!submitted && <button className="candidate-panel-quick-apply" onClick={quickApply}>⚡ Quick Apply</button>}</div></div>
@@ -190,15 +211,15 @@ export default function CandidatePortal(){
         <article className="candidate-panel role-card"><span>APPLIED ROLE</span><h3>{application.appliedRole || session?.appliedRole || 'Not selected'}</h3><p>{application.candidateType || session?.candidateType || 'Candidate'} • {application.employmentStatus ? titleCase(application.employmentStatus) : 'Profile information saved'}</p></article>
       </section>}
     </main>
-    {showApplication && <ApplicationModal application={application} requiredNames={requiredNames} uploadedNames={uploadedNames} onClose={()=>setShowApplication(false)} />}
+    {showApplication && <ApplicationModal application={application} requiredNames={requiredNames} uploadedNames={uploadedNames} onClose={()=>setShowApplication(false)} onEdit={()=>{ setShowApplication(false); nav('/candidate-welcome'); }} />}
     {showProgress && <ReturnProgressModal application={application} overall={overall} docPercent={docPercent} uploadedCount={uploadedNames.length} pendingNames={pendingNames} onClose={()=>setShowProgress(false)} onContinue={()=>nav('/candidate-welcome')} />}
   </div>;
 }
 
-function ProfileMini({title,value,sub}){return <div className="candidate-profile-mini"><small>{title}</small><b>{value}</b>{filled(sub)&&<span>{sub}</span>}</div>}
+function ProfileMini({icon,tone='blue',title,value,sub}){return <div className="candidate-profile-mini candidate-reference-mini"><div className={`candidate-mini-icon ${tone}`}>{icon}</div><div><small>{title}</small><b>{value}</b>{filled(sub)&&<span>{sub}</span>}</div></div>}
 function DashboardCard({icon,label,value,hint,progress,cls}){return <article className={`candidate-stat-card ${cls}`}><div className="candidate-card-top"><span>{icon}</span><small>{label}</small></div><strong>{value}</strong><p>{hint}</p>{typeof progress==='number'&&<div className="candidate-mini-progress"><i style={{width:`${progress}%`}}/></div>}</article>}
 function Timeline({done,active,title,text}){return <div className={`candidate-timeline-row ${done?'done':''} ${active?'active':''}`}><span>{done?'✓':''}</span><div><b>{title}</b><p>{text}</p></div></div>}
 function ReturnProgressModal({application,overall,docPercent,uploadedCount,pendingNames,onClose,onContinue}){const remaining=Math.max(0,100-overall);return <div className="return-progress-backdrop" role="dialog" aria-modal="true" aria-labelledby="return-progress-title"><section className="return-progress-modal"><header><div><span>WELCOME BACK</span><h2 id="return-progress-title">Your saved application progress</h2><p>Hello {application.fullName || 'Candidate'}, your profile has been restored successfully.</p></div><button type="button" onClick={onClose} aria-label="Close progress summary">×</button></header><div className="return-progress-cards"><DashboardCard icon="✓" label="Application Completed" value={`${overall}%`} hint={`${remaining}% still pending`} progress={overall} cls="profile"/><DashboardCard icon="◔" label="Application Pending" value={`${remaining}%`} hint={remaining ? 'Continue the remaining profile fields' : 'Application information complete'} progress={remaining} cls="status"/><DashboardCard icon="↑" label="Documents Uploaded" value={String(uploadedCount)} hint={`${docPercent}% of required documents`} progress={docPercent} cls="uploaded"/><DashboardCard icon="!" label="Documents Pending" value={String(pendingNames.length)} hint={pendingNames.length ? pendingNames.slice(0,2).join(', ') : 'No pending documents'} cls="pending"/></div><div className="return-progress-pending"><b>{pendingNames.length ? 'Pending document checklist' : 'Document checklist complete'}</b><p>{pendingNames.length ? pendingNames.join(' • ') : 'All required documents have been uploaded.'}</p></div><footer><button type="button" className="candidate-progress-secondary" onClick={onClose}>View My Profile</button>{remaining > 0 || pendingNames.length > 0 ? <button type="button" className="candidate-primary-btn" onClick={onContinue}>Continue Application →</button> : null}</footer></section></div>}
 function EducationSummary({title,data}){if(!data||!Object.values(data).some(filled))return null;return <div className="app-summary-block"><h4>{title}</h4><div className="app-summary-grid"><Summary k="Institution" v={data.institution}/><Summary k="Board / University" v={data.boardUniversity}/><Summary k="Course" v={data.degree}/><Summary k="Specialization" v={data.specialization}/><Summary k="Registration No." v={data.registrationNumber}/><Summary k="Passing Year" v={data.passingYear||data.endYear}/><Summary k="Percentage / CGPA" v={data.percentage}/></div></div>}
 function Summary({k,v}){if(!filled(v))return null;return <div><small>{k}</small><b>{v}</b></div>}
-function ApplicationModal({application,requiredNames,uploadedNames,onClose}){return <div className="application-modal-backdrop" onClick={onClose}><section className="application-modal" onClick={e=>e.stopPropagation()}><header><div><span>VERIFY-X APPLICATION</span><h2>{application.applicationId || 'Draft Application'}</h2></div><button onClick={onClose}>×</button></header><div className="application-modal-body"><div className="app-summary-block"><h4>Candidate Details</h4><div className="app-summary-grid"><Summary k="Name" v={application.fullName}/><Summary k="Email" v={application.email}/><Summary k="Applied Role" v={application.appliedRole}/><Summary k="Candidate Type" v={application.candidateType}/><Summary k="Status" v={titleCase(application.status)}/></div></div><div className="app-summary-block"><h4>Role Skills & Tools</h4><div className="app-summary-grid"><Summary k="Technical Skills" v={(application.skills||[]).join(', ') || 'Not provided'}/><Summary k="Tools & Platforms" v={(application.tools||[]).join(', ') || 'Not provided'}/></div></div><EducationSummary title="10th / SSLC" data={application.tenth}/><EducationSummary title="12th / PUC" data={application.twelfth}/><EducationSummary title="Degree / Bachelor's" data={application.degree}/><EducationSummary title="Master's (Optional)" data={application.master}/><div className="app-summary-block"><h4>Employment</h4><div className="app-summary-grid"><Summary k="Employment Status" v={titleCase(application.employmentStatus)}/><Summary k="Current Employer" v={application.currentEmployer}/><Summary k="Current Designation" v={application.currentDesignation}/><Summary k="Previous Employer" v={application.previousEmployer}/><Summary k="Previous Designation" v={application.previousDesignation}/></div></div><div className="app-summary-block"><h4>Offer Letters</h4>{(application.offerLetters||[]).map((o,i)=><div className="offer-summary" key={o.id||i}><b>Offer {i+1}</b><span>{o.companyName||'Company not entered'} • {o.designation||'Role not entered'} • {o.fileName||'No file selected'}</span></div>)}</div><div className="app-summary-block"><h4>Required Documents</h4><div className="modal-doc-grid">{requiredNames.map(name=><div key={name} className={uploadedNames.includes(name)?'uploaded':'missing'}><span>{uploadedNames.includes(name)?'✓':'!'}</span><div><b>{name}</b><small>{application.requiredDocuments?.[name]?.fileName || 'Pending'}</small></div></div>)}</div></div></div><footer><button className="candidate-primary-btn" onClick={onClose}>Close Application</button></footer></section></div>}
+function ApplicationModal({application,requiredNames,uploadedNames,onClose,onEdit}){return <div className="application-modal-backdrop" onClick={onClose}><section className="application-modal" onClick={e=>e.stopPropagation()}><header><div><span>VERIFY-X APPLICATION</span><h2>{application.applicationId || 'Draft Application'}</h2></div><button onClick={onClose}>×</button></header><div className="application-modal-body"><div className="app-summary-block"><h4>Candidate Details</h4><div className="app-summary-grid"><Summary k="Name" v={application.fullName}/><Summary k="Email" v={application.email}/><Summary k="Applied Role" v={application.appliedRole}/><Summary k="Candidate Type" v={application.candidateType}/><Summary k="Status" v={titleCase(application.status)}/></div></div><div className="app-summary-block"><h4>Role Skills & Tools</h4><div className="app-summary-grid"><Summary k="Technical Skills" v={(application.skills||[]).join(', ') || 'Not provided'}/><Summary k="Tools & Platforms" v={(application.tools||[]).join(', ') || 'Not provided'}/></div></div><EducationSummary title="10th / SSLC" data={application.tenth}/><EducationSummary title="12th / PUC" data={application.twelfth}/><EducationSummary title="Degree / Bachelor's" data={application.degree}/><EducationSummary title="Master's (Optional)" data={application.master}/><div className="app-summary-block"><h4>Employment</h4><div className="app-summary-grid"><Summary k="Employment Status" v={titleCase(application.employmentStatus)}/><Summary k="Current Employer" v={application.currentEmployer}/><Summary k="Current Designation" v={application.currentDesignation}/><Summary k="Previous Employer" v={application.previousEmployer}/><Summary k="Previous Designation" v={application.previousDesignation}/></div></div><div className="app-summary-block"><h4>Offer Letters</h4>{(application.offerLetters||[]).map((o,i)=><div className="offer-summary" key={o.id||i}><b>Offer {i+1}</b><span>{o.companyName||'Company not entered'} • {o.designation||'Role not entered'} • {o.fileName||'No file selected'}</span></div>)}</div><div className="app-summary-block"><h4>Required Documents</h4><div className="modal-doc-grid">{requiredNames.map(name=><div key={name} className={uploadedNames.includes(name)?'uploaded':'missing'}><span>{uploadedNames.includes(name)?'✓':'!'}</span><div><b>{name}</b><small>{application.requiredDocuments?.[name]?.fileName || 'Pending'}</small></div></div>)}</div></div></div><footer><button className="candidate-progress-secondary" type="button" onClick={onEdit}>Edit Application</button><button className="candidate-primary-btn" onClick={onClose}>Close Application</button></footer></section></div>}

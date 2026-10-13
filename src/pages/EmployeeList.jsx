@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import Sidebar from "../components/Sidebar";
-import { allCandidates, deleteCandidate, verifyCandidateUan } from "../services/employeeService";
+import { allCandidates, deleteCandidate } from "../services/employeeService";
 
 export default function EmployeeList() {
   const [q, setQ] = useState("");
@@ -88,26 +88,6 @@ export default function EmployeeList() {
     }
   };
 
-
-  const handleVerifyUan = async (candidate) => {
-    if (!candidate.uan) {
-      alert("UAN number is not available for this candidate.");
-      return;
-    }
-
-    if (!/^\d{12}$/.test(String(candidate.uan))) {
-      alert("UAN number must be exactly 12 digits before HR verification.");
-      return;
-    }
-
-    try {
-      await verifyCandidateUan(candidate.id, "HR");
-      alert("UAN verified successfully by HR.");
-      await loadCandidates();
-    } catch (err) {
-      alert(err?.message || "Unable to verify UAN.");
-    }
-  };
 
   const handleSearchChange = (e) => {
     setQ(e.target.value);
@@ -227,17 +207,7 @@ export default function EmployeeList() {
                           {String(c.candidateType || "").toUpperCase() === "EXPERIENCED" ? (
                             <div className="uan-review-cell">
                               <small>{c.uan || "UAN not provided"}</small>
-                              {c.uanVerified ? (
-                                <span className="doc-status-pill verified">Verified by HR</span>
-                              ) : (
-                                <button
-                                  type="button"
-                                  className="btn success small"
-                                  onClick={() => handleVerifyUan(c)}
-                                >
-                                  Verify UAN
-                                </button>
-                              )}
+                              {c.uan && <span className={`doc-status-pill ${c.uanVerified || String(c.uanVerificationStatus || '').toUpperCase() === 'VERIFIED' ? 'verified' : 'pending'}`}>{c.uanVerified || String(c.uanVerificationStatus || '').toUpperCase() === 'VERIFIED' ? 'Verified' : formatLabel(c.uanVerificationStatus || 'Pending')}</span>}
                             </div>
                           ) : (
                             <span className="muted">Not required</span>

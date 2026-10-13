@@ -25,14 +25,14 @@ export default function EditEmployee() {
   const set = (key, value) => setForm((current) => ({ ...current, [key]: value }));
   const submit = async (event) => {
     event.preventDefault(); setError(""); setSaving(true);
-    try { await updateCandidate(id, form); alert("Candidate updated successfully."); navigate("/dashboard"); }
-    catch (err) { setError(err.message || "Unable to update candidate."); }
+    try { await updateCandidate(id, form); alert("Candidate Updated Successfully."); navigate("/dashboard"); }
+    catch (err) { setError(err.message || "Unable To Update Candidate."); }
     finally { setSaving(false); }
   };
 
   return <div className="app"><Sidebar/><main className="content">
-    <div className="page-head"><div><span className="eyebrow">Candidate Workspace</span><h1>Edit Candidate</h1><p className="muted">Update the candidate information without changing the verification workflow.</p></div></div>
-    <section className="panel">{loading ? <div className="vx-feedback">Loading candidate...</div> : <form className="admin-add-form" onSubmit={submit}>
+    <div className="page-head"><div><span className="eyebrow">Candidate Workspace</span><h1>Edit Candidate</h1><p className="muted">Update The Candidate Information Without Changing The Verification Workflow.</p></div></div>
+    <section className="panel">{loading ? <div className="vx-feedback">Loading Candidate...</div> : <form className="admin-add-form" onSubmit={submit}>
       {error && <div className="error">{error}</div>}
       <div className="grid2">
         <input placeholder="Full Name" value={form.fullName} onChange={(e)=>set("fullName",e.target.value)} required/>
