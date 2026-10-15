@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import useAuth from "../hooks/useAuth";
 import {
@@ -9,8 +9,7 @@ import {
   requestHrPasswordResetByIdentifier,
   resetHrPasswordByIdentifier,
 } from "../services/authService";
-import { getLocalCandidates } from '../services/storage';
-import { getApplication } from '../services/candidateApplicationService';
+import { api } from '../services/apiService';
 import "./Login.css";
 
 export default function Login({ mode }) {
@@ -21,64 +20,42 @@ export default function Login({ mode }) {
   const [form, setForm] = useState({ email: "", password: "" });
   const [forgot, setForgot] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [remember, setRemember] = useState(false);
   const [verificationMethod, setVerificationMethod] = useState("email");
   const [reset, setReset] = useState({ identifier: "", otp: "", newPassword: "", confirmPassword: "" });
   const [otpSent, setOtpSent] = useState(false);
   const [err, setErr] = useState("");
   const [msg, setMsg] = useState(location.state?.message || "");
 
-  const rememberStorageKey = isAdmin ? "verifyx_remembered_hr_credentials" : "verifyx_remembered_candidate_credentials";
-
-  useEffect(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem(rememberStorageKey) || "null");
-      if (saved?.email && saved?.password) {
-        setForm({ email: saved.email, password: saved.password });
-        setRemember(true);
-      }
-    } catch {
-      localStorage.removeItem(rememberStorageKey);
-    }
-  }, [rememberStorageKey]);
-
-  const registeredCandidateEmails = useMemo(() => {
-    if (isAdmin) return [];
-    return [...new Set(getLocalCandidates().map((candidate) => String(candidate.email || '').trim().toLowerCase()).filter(Boolean))].sort();
-  }, [isAdmin]);
-
   const submit = async (e) => {
     e.preventDefault(); setErr(""); setMsg("");
+    const email = form.email.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setErr('Please enter a valid email address.');
+      return;
+    }
+    if (!form.password) { setErr("Please enter your password."); return; }
     try {
-      const loggedSession = isAdmin
-        ? await loginAdmin(form.email, form.password)
-        : await loginCandidate(form.email, form.password);
-      if (remember) {
-        localStorage.setItem(rememberStorageKey, JSON.stringify({ email: form.email.trim(), password: form.password }));
-      } else {
-        localStorage.removeItem(rememberStorageKey);
-      }
+      isAdmin
+        ? await loginAdmin(email, form.password)
+        : await loginCandidate(email, form.password);
       refresh();
       if (isAdmin) {
-        nav("/dashboard");
+        nav('/dashboard');
       } else {
-        const identity = loggedSession?.id || loggedSession?.email || form.email;
-        const existingApplication = getApplication(identity);
-        if (existingApplication) {
-          localStorage.setItem(`verifyx_portal_access_${identity}`, 'true');
-          sessionStorage.setItem(`verifyx_show_return_progress_${identity}`, 'true');
-          nav("/candidate", { replace: true });
-        } else {
-          localStorage.removeItem(`verifyx_portal_access_${identity}`);
-          nav("/candidate-welcome", { replace: true });
+        // Profile is sourced from backend; never infer registration from local browser data.
+        try {
+          const profile = await api.candidateProfile();
+          nav(profile && Object.keys(profile).length ? '/candidate' : '/candidate-welcome', { replace: true });
+        } catch (profileError) {
+          // Authenticated users may have no profile yet (404). Other failures are reported.
+          if (profileError?.status === 404) nav('/candidate-welcome', { replace: true });
+          else { setErr(profileError?.message || 'Unable to load your profile from the server.'); } 
         }
       }
     } catch (x) {
-      if (!isAdmin && x?.code === "CANDIDATE_NOT_REGISTERED") {
-        nav("/candidate-register", { state: { message: "First-time candidate? Please register before logging in.", email: form.email } });
-        return;
-      }
-      setErr(x.message);
+      setErr(x?.status === 401 || x?.status === 403
+        ? 'Invalid email address or password. Please try again.'
+        : x?.message || 'Unable to login. Please try again.');
     }
   };
 
@@ -125,7 +102,7 @@ export default function Login({ mode }) {
       <aside className="vx-login-illustration" aria-hidden="true" />
 
       <section className="vx-login-form-area">
-        <form className="vx-auth-login-card" onSubmit={forgot ? handleForgotPassword : submit}>
+        <form noValidate className="vx-auth-login-card" onSubmit={forgot ? handleForgotPassword : submit}>
           <div className="vx-login-brand">
             <img src="/verify-x-logo.svg" alt="VerifyX" />
           </div>
@@ -142,10 +119,9 @@ export default function Login({ mode }) {
               <span className="vx-input-icon" aria-hidden="true">✉</span>
               <div className="vx-input-content">
                 <label htmlFor="login-email">Email</label>
-                <input id="login-email" type="email" list={!isAdmin ? "registered-candidate-emails" : undefined} autoComplete="email" placeholder="abc@gmail.com" value={form.email} onChange={(e)=>setForm({...form,email:e.target.value})} required />
+                <input id="login-email" type="email" autoComplete="email" placeholder="abc@gmail.com" value={form.email} onChange={(e)=>{setForm({...form,email:e.target.value});if(err) setErr("");}} onBlur={() => {const value=form.email.trim();if(value && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) setErr("Please enter a valid email address.");}} aria-invalid={err === "Please enter a valid email address."} required />
               </div>
             </div>
-            {!isAdmin && <datalist id="registered-candidate-emails">{registeredCandidateEmails.map((email) => <option value={email} key={email} />)}</datalist>}
 
             <div className="vx-input-box vx-password-box">
               <span className="vx-input-icon vx-key-icon" aria-hidden="true">◆</span>
@@ -157,7 +133,7 @@ export default function Login({ mode }) {
             </div>
 
             <div className="vx-login-options">
-              <label className="vx-remember-row"><input type="checkbox" checked={remember} onChange={(e)=>setRemember(e.target.checked)}/><span>Remember me</span></label>
+              <span className="vx-remember-row">For security, log in again after refreshing the page.</span>
               <button type="button" className="vx-forgot-link" onClick={()=>{setForgot(true);setReset((r)=>({...r,identifier:form.email}))}}>Forgot Password?</button>
             </div>
 

@@ -1,6 +1,6 @@
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
 
-const getToken = () => localStorage.getItem('verifyx_token');
+import { getToken } from './storage';
 
 async function request(path, options = {}) {
   const isForm = options.body instanceof FormData;
@@ -14,7 +14,9 @@ async function request(path, options = {}) {
   const payload = type.includes('application/json') ? await response.json() : await response.text();
   if (!response.ok) {
     const message = payload?.message || payload?.error || (typeof payload === 'string' ? payload : 'API request failed');
-    throw new Error(message);
+    const error = new Error(message);
+    error.status = response.status;
+    throw error;
   }
   return payload?.data ?? payload;
 }
@@ -35,6 +37,8 @@ export const api = {
   registrationOptions: () => request('/api/auth/registration-options'),
   educationAutoFill: (documentType, file) => { const form = new FormData(); form.append('file', file); return request(`/api/education/auto-fill/${documentType}`, { method: 'POST', body: form }); },
   candidateRegister: (body) => request('/api/auth/candidateRegister', { method: 'POST', body: JSON.stringify(body) }),
+  requestCandidatePasswordReset: (email) => request('/api/auth/forgot-password', { method: 'POST', body: JSON.stringify({ email }) }),
+  resetCandidatePassword: (body) => request('/api/auth/reset-password', { method: 'POST', body: JSON.stringify(body) }),
   candidateLogin: (body) => request('/api/auth/candidateLogin', { method: 'POST', body: JSON.stringify(body) }),
   verifyCandidateEmail: (body) => request('/api/auth/candidate/verify-email', { method: 'POST', body: JSON.stringify(body) }),
   resendCandidateVerification: (email) => request(`/api/auth/candidate/resend-verification?email=${encodeURIComponent(email)}`, { method: 'POST' }),

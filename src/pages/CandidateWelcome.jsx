@@ -4,7 +4,7 @@ import useAuth from '../hooks/useAuth';
 import { api } from '../services/apiService';
 import { automaticallyVerifyCandidateDocument } from '../services/automaticDocumentVerificationService';
 import { findLocalCandidate } from '../services/localStorage/storage';
-import { saveApplication, submitApplication } from '../services/candidateApplicationService';
+import { getApplication, saveApplication, submitApplication } from '../services/candidateApplicationService';
 import { sendApplicationSubmittedMail, sendProfileCompletionReminder } from '../services/mailService';
 import { addNotification, ensureRegistrationReminder } from '../services/notificationService';
 import { IT_SKILLS, IT_TOOLS, getRoleRecommendations } from '../utils/constants';
@@ -125,7 +125,7 @@ export default function CandidateWelcome() {
   const [savedMessage, setSavedMessage] = useState('');
 
   useEffect(() => {
-    const saved = JSON.parse(localStorage.getItem(key) || 'null');
+    const saved = getApplication(identity);
     const local = findLocalCandidate(session?.email) || {};
     setForm({
       ...empty,
@@ -155,9 +155,9 @@ export default function CandidateWelcome() {
   useEffect(() => {
     if (!identity || !form.fullName) return;
     const timer = setTimeout(() => {
-      localStorage.setItem(key, JSON.stringify({ ...form, lastSavedAt: new Date().toISOString() }));
-      localStorage.setItem(startedKey, 'true');
-      setSavedMessage('Draft Saved Automatically');
+      saveApplication(identity, { ...form, status: 'DRAFT' });
+      
+      setSavedMessage('Draft held temporarily. Submit to save your details to the server.');
       setTimeout(() => setSavedMessage(''), 1400);
     }, 450);
     return () => clearTimeout(timer);
@@ -467,9 +467,9 @@ export default function CandidateWelcome() {
   });
 
   const persist = (complete = false) => {
-    localStorage.setItem(key, JSON.stringify({ ...form, lastSavedAt: new Date().toISOString(), ...(complete ? { completedAt: new Date().toISOString() } : {}) }));
-    localStorage.setItem(startedKey, 'true');
-    if (complete) localStorage.setItem(completeKey, 'true');
+    saveApplication(identity, { ...form, status: complete ? 'COMPLETE' : 'DRAFT' });
+    
+    
   };
 
   const saveAndExit = async () => {
@@ -601,8 +601,8 @@ export default function CandidateWelcome() {
       overallCompletion: 100,
       requiredDocumentNames: requiredVerificationDocuments.map((doc) => doc.name),
     }, session);
-    localStorage.setItem(portalAccessKey, 'true');
-    localStorage.setItem(completeKey, 'true');
+    
+    
     addNotification({ audience: 'CANDIDATE', recipient: session?.email, type: 'SUBMISSION_SUCCESS', applicationId: submitted.applicationId, title: 'Documents submitted successfully', message: `Your application ${submitted.applicationId} and all required documents were submitted successfully for HR review.` });
     addNotification({ audience: 'HR', type: 'NEW_CANDIDATE', applicationId: submitted.applicationId, title: 'New candidate registered', message: `${form.fullName || session?.name || 'A candidate'} submitted documents for ${submitted.appliedRole || 'the applied role'}. Application ${submitted.applicationId} is ready for review.` });
     setSavedMessage('Documents submitted successfully. You will be logged out securely…');

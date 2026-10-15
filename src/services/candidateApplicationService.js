@@ -1,16 +1,18 @@
+const cache = new Map();
+const browserCache = { getItem: (key) => cache.get(key) ?? null, setItem: (key, value) => cache.set(key, String(value)), removeItem: (key) => cache.delete(key) };
 const REGISTRY_KEY = 'verifyx_submitted_applications';
 
 export const applicationKey = (identity) => `verifyx_application_${identity}`;
 
 export function getApplication(identity) {
-  try { return JSON.parse(localStorage.getItem(applicationKey(identity)) || 'null'); }
+  try { return JSON.parse(browserCache.getItem(applicationKey(identity)) || 'null'); }
   catch { return null; }
 }
 
 export function saveApplication(identity, data) {
   const existing = getApplication(identity) || {};
   const app = { status: 'DRAFT', ...existing, ...data, identity, updatedAt: new Date().toISOString() };
-  localStorage.setItem(applicationKey(identity), JSON.stringify(app));
+  browserCache.setItem(applicationKey(identity), JSON.stringify(app));
 
   // Also upsert into the shared registry the HR Dashboard reads from, so
   // every document upload / field change is visible on the HR side live,
@@ -19,7 +21,7 @@ export function saveApplication(identity, data) {
   // submitted record here (we still refresh it so live edits still show).
   const registry = getSubmittedApplications().filter((item) => item.identity !== identity);
   registry.unshift(app);
-  localStorage.setItem(REGISTRY_KEY, JSON.stringify(registry));
+  browserCache.setItem(REGISTRY_KEY, JSON.stringify(registry));
 
   return app;
 }
@@ -41,10 +43,10 @@ export function submitApplication(identity, data, session = {}) {
     locked: true,
     hrExtractionStatus: 'READY_FOR_EXTRACTION',
   };
-  localStorage.setItem(applicationKey(identity), JSON.stringify(app));
+  browserCache.setItem(applicationKey(identity), JSON.stringify(app));
   const registry = getSubmittedApplications().filter((item) => item.identity !== identity);
   registry.unshift(app);
-  localStorage.setItem(REGISTRY_KEY, JSON.stringify(registry));
+  browserCache.setItem(REGISTRY_KEY, JSON.stringify(registry));
   return app;
 }
 
@@ -107,7 +109,7 @@ function dedupeApplications(list) {
 export function getSubmittedApplications() {
   let list;
   try {
-    const value = JSON.parse(localStorage.getItem(REGISTRY_KEY) || '[]');
+    const value = JSON.parse(browserCache.getItem(REGISTRY_KEY) || '[]');
     list = Array.isArray(value) ? value : [];
   } catch {
     list = [];
@@ -118,7 +120,7 @@ export function getSubmittedApplications() {
   // Self-heal: if duplicates were found, persist the cleaned-up registry
   // so this candidate shows as exactly one record from now on.
   if (deduped.length !== list.length) {
-    localStorage.setItem(REGISTRY_KEY, JSON.stringify(deduped));
+    browserCache.setItem(REGISTRY_KEY, JSON.stringify(deduped));
   }
 
   return deduped;
@@ -126,15 +128,15 @@ export function getSubmittedApplications() {
 
 export function removeSubmittedApplication(identity) {
   const list = getSubmittedApplications().filter((item) => item.identity !== identity);
-  localStorage.setItem(REGISTRY_KEY, JSON.stringify(list));
-  localStorage.removeItem(applicationKey(identity));
+  browserCache.setItem(REGISTRY_KEY, JSON.stringify(list));
+  browserCache.removeItem(applicationKey(identity));
 }
 
 export function updateSubmittedApplication(identity, patch) {
   const list = getSubmittedApplications();
   const next = list.map((item) => item.identity === identity ? { ...item, ...patch, updatedAt: new Date().toISOString() } : item);
-  localStorage.setItem(REGISTRY_KEY, JSON.stringify(next));
+  browserCache.setItem(REGISTRY_KEY, JSON.stringify(next));
   const existing = getApplication(identity);
-  if (existing) localStorage.setItem(applicationKey(identity), JSON.stringify({ ...existing, ...patch, updatedAt: new Date().toISOString() }));
+  if (existing) browserCache.setItem(applicationKey(identity), JSON.stringify({ ...existing, ...patch, updatedAt: new Date().toISOString() }));
   return next.find((item) => item.identity === identity) || null;
 }
