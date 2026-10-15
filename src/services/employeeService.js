@@ -319,12 +319,8 @@ const normalize = (c = {}) => {
 };
 
 export const allCandidates = async () => {
-  // Always read whatever has been submitted from the Candidate Portal and
-  // saved to this browser's localStorage. This is merged in below no matter
-  // what happens with the backend call, so a candidate's data is never
-  // missing from the HR portal just because the backend responded (even
-  // with an empty/partial list) instead of throwing an error.
-  const localList = getLocalCandidateList();
+  // HR records are obtained from the backend; never populate HR rows from browser data.
+  const localList = [];
 
   let backendList = [];
   try {
@@ -376,11 +372,11 @@ export const allCandidates = async () => {
     );
 
     backendList = withDocuments.map(normalize);
-  } catch {
-    backendList = [];
+  } catch (error) {
+    throw error;
   }
 
-  if (!backendList.length) return localList;
+  if (!backendList.length) return [];
 
   // Merge: a candidate already returned by the backend wins for its core
   // profile fields (it's the source of truth once a real server is
@@ -446,7 +442,7 @@ export const allCandidates = async () => {
 
 export const findCandidate = async (id) => {
   if (!id) throw new Error('Candidate ID is missing.');
-  const localById = findLocalCandidateById(id);
+  const localById = null;
   try {
     const [details, review, candidateListResult, permanentContact, currentContact] = await Promise.all([
       api.candidate(id),
@@ -554,20 +550,15 @@ export async function addCandidate(candidate) {
       candidateType: normalized.candidateType,
     });
     return normalized;
-  } catch {
-    return saveLocalCandidate({ ...normalized, id: `local-${Date.now()}`, emailVerified: true }, candidate.password || 'Verify@123');
+  } catch (error) {
+    throw error;
   }
 }
 
 export const deleteCandidate = async (id) => {
   try {
     return await api.deleteCandidate(id);
-  } catch {
-    const local = findLocalCandidateById(id);
-    if (local?.email) removeLocalCandidate(local.email);
-    removeSubmittedApplication(id);
-    return true;
-  }
+  } catch (error) { throw error; }
 };
 
 export async function updateCandidate(id, patch) {

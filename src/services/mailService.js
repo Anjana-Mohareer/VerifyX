@@ -1,3 +1,4 @@
+const reminderTimes = new Map();
 import emailjs from "@emailjs/browser";
 
 const SERVICE_ID = "service_thf7j6o";
@@ -10,7 +11,7 @@ const send = (params) => emailjs.send(SERVICE_ID, TEMPLATE_ID, { company_name: '
 
 const getHrNotificationEmail = () => {
   try {
-    const saved = JSON.parse(localStorage.getItem('verifyx_hr_profile') || 'null');
+    const saved = null;
     if (saved?.email) return saved.email;
   } catch { /* use configured fallback */ }
   return import.meta.env.VITE_HR_NOTIFICATION_EMAIL || 'hr@verifyx.com';
@@ -49,7 +50,7 @@ export async function sendHrCandidateRegisteredMail(candidate) {
 export async function sendProfileCompletionReminder(candidate, force = false) {
   if (!candidate?.email) return false;
   const reminderKey = `verifyx_profile_reminder_mail_${String(candidate.email).trim().toLowerCase()}`;
-  const lastSent = Number(localStorage.getItem(reminderKey) || 0);
+  const lastSent = Number(reminderTimes.get(reminderKey) || 0);
   if (!force && Date.now() - lastSent < 24 * 60 * 60 * 1000) return false;
   const result = await send({
     to_name: candidate.fullName || candidate.name || 'Candidate',
@@ -57,7 +58,7 @@ export async function sendProfileCompletionReminder(candidate, force = false) {
     application_status: 'PROFILE INCOMPLETE',
     remarks: 'Your Verify-X profile is not complete yet. Please login and complete your education, employment details and all required document uploads, then submit the application for HR review.',
   });
-  localStorage.setItem(reminderKey, String(Date.now()));
+  reminderTimes.set(reminderKey, Date.now());
   return result;
 }
 

@@ -1,3 +1,4 @@
+const shownAlerts = new Set();
 import { useLocation, useParams } from "react-router-dom";
 import { useEffect, useState } from "react";
 import Sidebar from "../components/Sidebar";
@@ -251,8 +252,8 @@ export default function EmployeeDetails() {
   useEffect(() => {
     if (!c || missingDocuments.length === 0) return;
     const alertKey = `verifyx-hr-missing-docs-${c.id}-${missingDocuments.join("|")}`;
-    if (localStorage.getItem(alertKey)) return;
-    localStorage.setItem(alertKey, "shown");
+    if (shownAlerts.has(alertKey)) return;
+    shownAlerts.add(alertKey);
     alert(
       `Missing Document Alert for HR
 

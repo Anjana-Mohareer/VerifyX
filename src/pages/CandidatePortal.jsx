@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useAuth from '../hooks/useAuth';
 import { findLocalCandidate } from '../services/localStorage/storage';
+import { api } from '../services/apiService';
 import { getApplication } from '../services/candidateApplicationService';
 import { addNotification, getNotifications, markNotificationsRead } from '../services/notificationService';
 import { formatInterviewSlot, getCandidateInterviewWorkflow, selectHrInterviewSlot } from '../services/interviewWorkflowService';
@@ -37,25 +38,33 @@ export default function CandidatePortal(){
   const [selectingInterviewSlot, setSelectingInterviewSlot] = useState('');
 
   useEffect(() => {
-    if (identity) setProfilePhoto(localStorage.getItem(`verifyx_candidate_photo_${identity}`) || '');
+    let cancelled = false;
+    let objectUrl = null;
+    if (identity) api.profilePhotoBlob().then((blob) => {
+      if (!cancelled) { objectUrl = URL.createObjectURL(blob); setProfilePhoto(objectUrl); }
+    }).catch(() => { if (!cancelled) setProfilePhoto(''); });
+    return () => { cancelled = true; if (objectUrl) URL.revokeObjectURL(objectUrl); };
   }, [identity]);
 
-  const changeProfilePhoto = (event) => {
+  const changeProfilePhoto = async (event) => {
     const file = event.target.files?.[0]; event.target.value = '';
     if (!file) return;
     if (!['image/jpeg', 'image/png'].includes(file.type)) { setPhotoMessage('Please select a JPG or PNG image.'); return; }
     if (file.size > 5 * 1024 * 1024) { setPhotoMessage('Profile photo must be 5 MB or smaller.'); return; }
-    const reader = new FileReader();
-    reader.onload = () => { const image = new Image(); image.onload = () => { const size = Math.min(image.width, image.height); const canvas = document.createElement('canvas'); canvas.width = 512; canvas.height = 512; const context = canvas.getContext('2d'); context.drawImage(image, (image.width - size) / 2, (image.height - size) / 2, size, size, 0, 0, 512, 512); const optimized = canvas.toDataURL('image/jpeg', .82); try { localStorage.setItem(`verifyx_candidate_photo_${identity}`, optimized); setProfilePhoto(optimized); setPhotoMessage('Profile photo updated successfully.'); } catch { setPhotoMessage('Unable to save the photo. Please select a smaller image.'); } }; image.src = reader.result; };
-    reader.readAsDataURL(file);
+    const formData = new FormData();
+    formData.append('file', file);
+    try {
+      await api.uploadProfilePhoto(formData);
+      const blob = await api.profilePhotoBlob();
+      setProfilePhoto((old) => { if (old.startsWith('blob:')) URL.revokeObjectURL(old); return URL.createObjectURL(blob); });
+      setPhotoMessage('Profile photo updated successfully.');
+    } catch (error) { setPhotoMessage(error?.message || 'Unable to save the photo to the server.'); }
   };
 
   useEffect(()=>{
     if(!identity) return;
-    const allowed = localStorage.getItem(`verifyx_portal_access_${identity}`) === 'true';
-    if(!allowed){ nav('/candidate-welcome',{replace:true}); return; }
     const saved = getApplication(identity);
-    const draft = JSON.parse(localStorage.getItem(`verifyx_welcome_profile_${identity}`) || 'null');
+    const draft = saved;
     const local = findLocalCandidate(session?.email) || {};
     setApplication(saved || (draft ? {
       ...draft,
@@ -64,8 +73,7 @@ export default function CandidatePortal(){
       appliedRole: local.appliedRole || session?.appliedRole || '',
       status:'DRAFT'
     } : null));
-    if (sessionStorage.getItem(`verifyx_show_return_progress_${identity}`) === 'true') {
-      sessionStorage.removeItem(`verifyx_show_return_progress_${identity}`);
+    if (saved?.status === 'DRAFT') {
       setActiveSection('profile');
       setShowProgress(true);
     }

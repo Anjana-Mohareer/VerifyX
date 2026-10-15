@@ -1,3 +1,4 @@
+import { getToken } from './storage';
 const EXTENSION_RULES = {
   'Resume': ['pdf', 'doc', 'docx'],
   'Aadhaar Card': ['pdf', 'png', 'jpg', 'jpeg'],
@@ -52,7 +53,7 @@ export async function automaticallyVerifyCandidateDocument(args) {
       formData.append('panNumber', args.panNumber || '');
       formData.append('aadhaarNumber', args.aadhaarNumber || '');
       formData.append('uanNumber', args.uanNumber || '');
-      const token = localStorage.getItem('verifyx_token');
+      const token = getToken();
       const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
       const response = await fetch(`${baseUrl}/api/candidate/auto-verify-document`, {
         method: 'POST',

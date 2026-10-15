@@ -1,3 +1,4 @@
+const shownAlerts = new Set();
 import { useEffect, useMemo, useState } from "react";
 import Sidebar from "../components/Sidebar";
 import useAuth from "../hooks/useAuth";
@@ -127,8 +128,8 @@ export default function DocumentUpload({ mode = "admin" }) {
     if (!missing.length) return;
 
     const alertKey = `verifyx-missing-docs-${c.id}-${missing.join("|")}`;
-    if (localStorage.getItem(alertKey)) return;
-    localStorage.setItem(alertKey, "shown");
+    if (shownAlerts.has(alertKey)) return;
+    shownAlerts.add(alertKey);
     alert(
       `Document Alert: Please Upload The Following Required Documents:
 
