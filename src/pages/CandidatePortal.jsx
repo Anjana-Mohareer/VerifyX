@@ -6,7 +6,6 @@ import { api } from '../services/apiService';
 import { getApplication } from '../services/candidateApplicationService';
 import { addNotification, getNotifications, markNotificationsRead } from '../services/notificationService';
 import { formatInterviewSlot, getCandidateInterviewWorkflow, selectHrInterviewSlot } from '../services/interviewWorkflowService';
-import { sendInterviewSlotSelectedMail } from '../services/mailService';
 import verifyXLogo from '../assets/verify-x-full-logo.png';
 import './CandidatePortal.css';
 
@@ -36,6 +35,8 @@ export default function CandidatePortal(){
   const [photoMessage, setPhotoMessage] = useState('');
   const [interviewWorkflow, setInterviewWorkflow] = useState(null);
   const [selectingInterviewSlot, setSelectingInterviewSlot] = useState('');
+  const [interviewSlotsLoading, setInterviewSlotsLoading] = useState(false);
+  const [interviewSlotsError, setInterviewSlotsError] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -86,15 +87,39 @@ export default function CandidatePortal(){
   }, [session?.email]);
 
   useEffect(() => {
-    const refreshInterview = () => getCandidateInterviewWorkflow(session?.email).then(setInterviewWorkflow).catch(err => console.error('Interview slots:', err));
-    refreshInterview(); window.addEventListener('verifyx-interview-workflow-updated', refreshInterview);
-    return () => window.removeEventListener('verifyx-interview-workflow-updated', refreshInterview);
+    let cancelled = false;
+    const refreshInterview = async () => {
+      setInterviewSlotsLoading(true);
+      setInterviewSlotsError('');
+      try {
+        const workflow = await getCandidateInterviewWorkflow();
+        if (!cancelled) setInterviewWorkflow(workflow);
+      } catch (error) {
+        if (!cancelled) {
+          setInterviewWorkflow(null);
+          setInterviewSlotsError(error?.message || 'Unable to load interview slots from the server.');
+        }
+      } finally {
+        if (!cancelled) setInterviewSlotsLoading(false);
+      }
+    };
+    if (session?.email) refreshInterview();
+    window.addEventListener('verifyx-interview-workflow-updated', refreshInterview);
+    return () => { cancelled = true; window.removeEventListener('verifyx-interview-workflow-updated', refreshInterview); };
   }, [session?.email]);
 
   const chooseInterviewSlot = async (slot) => {
-    if (!slot || selectingInterviewSlot) return; setSelectingInterviewSlot(slot);
-    try { const updated = await selectHrInterviewSlot(session?.email, slot); setInterviewWorkflow(updated); addNotification({ audience: 'HR', type: 'INTERVIEW_SLOT_SELECTED', applicationId: updated.applicationId || '', title: 'HR Interview Slot Selected', message: `${updated.fullName || 'Candidate'} selected ${formatInterviewSlot(slot)}. Please confirm/fix the interview from the HR Dashboard.` }); await sendInterviewSlotSelectedMail(updated, slot).catch(() => false); alert('Interview Time Slot Selected Successfully. HR Has Been Notified.'); }
-    catch (err) { alert(err?.message || 'Unable To Select The Interview Time Slot.'); } finally { setSelectingInterviewSlot(''); }
+    if (!slot?.id || selectingInterviewSlot) return;
+    setSelectingInterviewSlot(String(slot.id));
+    try {
+      const updated = await selectHrInterviewSlot(session?.email, slot);
+      setInterviewWorkflow(updated);
+      alert('Interview time slot booked successfully. Your selection has been saved on the server.');
+    } catch (error) {
+      alert(error?.message || 'Unable to book the interview time slot. Please try again.');
+    } finally {
+      setSelectingInterviewSlot('');
+    }
   };
 
   const requiredNames = useMemo(()=>{
@@ -202,6 +227,8 @@ export default function CandidatePortal(){
         {!submitted && <button className="candidate-primary-btn continue-btn" onClick={()=>nav('/candidate-welcome')}>Continue Application →</button>}
       </section>}
 
+      {activeSection==='profile' && interviewSlotsLoading && <p role="status">Loading interview slots from the server…</p>}
+      {activeSection==='profile' && interviewSlotsError && <p role="alert">{interviewSlotsError}</p>}
       {activeSection==='profile' && interviewWorkflow && <section className="candidate-panel candidate-interview-panel candidate-section-view" id="candidate-hr-interview"><div className="candidate-panel-head"><div><span>HR INTERVIEW</span><h2>{interviewWorkflow.selectedSlot ? 'Interview Slot Confirmed' : 'Choose Your Interview Time'}</h2></div><strong className="candidate-interview-stage">{interviewWorkflow.finalDecision === 'APPROVED' ? 'Approved' : interviewWorkflow.interviewStatus === 'INTERVIEW_CONFIRMED' ? 'Confirmed' : interviewWorkflow.selectedSlot ? 'Awaiting HR Confirmation' : 'Action Required'}</strong></div><p className="candidate-interview-copy">Your Background Verification Is Complete. {interviewWorkflow.interviewStatus === 'INTERVIEW_CONFIRMED' ? 'HR Has Confirmed Your Interview At The Selected Time.' : interviewWorkflow.selectedSlot ? 'HR Has Received Your Selected Interview Time And Will Confirm The Interview.' : 'Select One Of The HR Interview Slots Below. Once Selected, HR Will Receive An Email Confirmation.'}</p><div className="candidate-interview-slots">{(interviewWorkflow.interviewSlots || []).map((slot) => <button type="button" key={slot.id} disabled={Boolean(interviewWorkflow.selectedSlot) || Boolean(selectingInterviewSlot)} className={interviewWorkflow.selectedSlot === slot.dateTime ? 'selected' : ''} onClick={() => chooseInterviewSlot(slot)}><span>{interviewWorkflow.selectedSlot === slot.dateTime ? '✓' : '◷'}</span><div><b>{formatInterviewSlot(slot)}</b><small>{interviewWorkflow.selectedSlot === slot.dateTime ? 'Selected Time Slot' : interviewWorkflow.selectedSlot ? 'Another Slot Was Selected' : 'Select This Time'}</small></div></button>)}</div>{interviewWorkflow.finalDecision === 'APPROVED' && <div className="candidate-interview-result approved"><b>HR Interview Approved</b><span>Your Profile Has Moved To The Offer-Letter Release Stage.</span></div>}</section>}
 
       {activeSection==='documents' && <section className="candidate-panel candidate-doc-panel candidate-section-view" id="candidate-documents">

@@ -1,4 +1,4 @@
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
+const BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080').trim().replace(/\/+$/, '');
 
 import { getToken } from './storage';
 
@@ -9,7 +9,12 @@ async function request(path, options = {}) {
     ...(getToken() ? { Authorization: `Bearer ${getToken()}` } : {}),
     ...(options.headers || {}),
   };
-  const response = await fetch(`${BASE_URL}${path}`, { ...options, headers });
+  let response;
+  try {
+    response = await fetch(`${BASE_URL}${path}`, { ...options, headers });
+  } catch (error) {
+    throw new Error(`Cannot connect to VerifyX backend at ${BASE_URL}. Check VITE_API_BASE_URL, backend availability, and CORS allowed origins. (${error.message})`);
+  }
   const type = response.headers.get('content-type') || '';
   const payload = type.includes('application/json') ? await response.json() : await response.text();
   if (!response.ok) {
@@ -17,6 +22,9 @@ async function request(path, options = {}) {
     const error = new Error(message);
     error.status = response.status;
     throw error;
+  }
+  if (payload && typeof payload === 'object' && payload.success === false) {
+    throw new Error(payload.message || 'Backend rejected the request.');
   }
   return payload?.data ?? payload;
 }
