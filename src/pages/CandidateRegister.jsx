@@ -24,6 +24,7 @@ export default function CandidateRegister() {
   const [otp, setOtp] = useState("");
   const [verificationStep, setVerificationStep] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [emailServiceUnavailable, setEmailServiceUnavailable] = useState(false);
   const [form, setForm] = useState({ fullName: "", email: location.state?.email || "", phone: "", password: "", candidateType: "", appliedRole: "" });
   const [registrationOptions, setRegistrationOptions] = useState({ appliedRoles: [], candidateTypes: [] });
   const [optionsLoading, setOptionsLoading] = useState(true);
@@ -67,7 +68,7 @@ export default function CandidateRegister() {
   };
 
   const submit = async (e) => {
-    e.preventDefault(); setErr(""); setMsg("");
+    e.preventDefault(); setErr(""); setMsg(""); setEmailServiceUnavailable(false);
     if (!REGEX.name.test(form.fullName.trim())) return setErr("Full name must contain only letters and spaces.");
     if (!/^[A-Za-z0-9._%+-]+@gmail\.com$/.test(form.email.trim())) return setErr("Please enter a valid Gmail address ending with @gmail.com.");
     if (!REGEX.mobile.test(form.phone.trim())) return setErr("Mobile number must be exactly 10 digits and start with 6, 7, 8, or 9.");
@@ -77,7 +78,7 @@ export default function CandidateRegister() {
     if (!form.appliedRole) return setErr("Please select an applied role.");
     if (!form.candidateType) return setErr("Please select a candidate type.");
     try { setBusy(true); const result = await registerCandidate({ ...form, fullName: form.fullName.trim(), email: form.email.trim() }); ensureRegistrationReminder(form); setVerificationStep(true); const devOtp = String(result || "").match(/DEV_OTP=(\d{6})/)?.[1]; setMsg(devOtp ? `Account created. Local test OTP: ${devOtp} (enable mail settings for real email delivery).` : "Account created. We sent a 6-digit verification OTP to your email."); }
-    catch (x) { setErr(x.message || "Unable to complete registration. Please try again."); } finally { setBusy(false); }
+    catch (x) { setEmailServiceUnavailable(x?.status === 503); setErr(x.message || "Unable to complete registration. Please try again."); } finally { setBusy(false); }
   };
 
   const verify = async (e) => {
@@ -105,7 +106,8 @@ export default function CandidateRegister() {
         <form className="auth-card wide register-card" onSubmit={verificationStep ? verify : submit}>
           <h1>{verificationStep ? "Verify Email" : "Candidate Sign Up"}</h1>
           <p className="muted">{verificationStep ? `Enter The OTP Sent To ${form.email}` : "Create Your Account First. After Email Verification, You Will Be Redirected To Login."}</p>
-          {err && <div className="error">{err}</div>}{msg && <div className="success">{msg}</div>}
+          {err && <div className="error" role="alert">{err}</div>}{msg && <div className="success">{msg}</div>}
+          {emailServiceUnavailable && !verificationStep && <p className="muted" role="status">Your entered details are preserved. Check that the backend email verification service is working, then select Create Account &amp; Send OTP again.</p>}
           {!verificationStep ? <div className="grid2">
             <input placeholder="Full Name" value={form.fullName} maxLength={60} onChange={(e)=>set("fullName",e.target.value)} required />
             <input placeholder="Email" type="email" value={form.email} onChange={(e)=>set("email",e.target.value)} required />
