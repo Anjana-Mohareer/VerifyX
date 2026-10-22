@@ -15,6 +15,7 @@ async function request(path, options = {}) {
   if (!response.ok) {
     const message = payload?.message || payload?.error || (typeof payload === 'string' ? payload : 'API request failed');
     const error = new Error(message);
+    error.status = response.status;
     if (options.includeValidationDetails && payload?.data && typeof payload.data === 'object' && !Array.isArray(payload.data)) {
       error.registrationFieldErrors = payload.data;
     }
@@ -47,6 +48,17 @@ export const api = {
       if (error?.registrationFieldErrors) {
         const details = Object.values(error.registrationFieldErrors).filter((value) => typeof value === 'string');
         if (details.length) throw new Error(details.join(' '));
+      }
+      // The backend performs remote mailbox verification during registration.
+      // A 503 means that dependency could not process the request; it is not
+      // a frontend validation error and must never be treated as a successful signup.
+      if (error?.status === 503) {
+        const unavailable = new Error(
+          'Email verification service is temporarily unavailable. Your registration was not confirmed. Please try again later.'
+        );
+        unavailable.status = 503;
+        unavailable.code = 'REGISTRATION_EMAIL_VERIFIER_UNAVAILABLE';
+        throw unavailable;
       }
       throw error;
     }
