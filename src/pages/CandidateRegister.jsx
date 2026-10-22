@@ -69,11 +69,15 @@ export default function CandidateRegister() {
   const submit = async (e) => {
     e.preventDefault(); setErr(""); setMsg("");
     if (!REGEX.name.test(form.fullName.trim())) return setErr("Full name must contain only letters and spaces.");
-    if (!REGEX.email.test(form.email.trim())) return setErr("Please enter a valid email address.");
+    if (!/^[A-Za-z0-9._%+-]+@gmail\.com$/.test(form.email.trim())) return setErr("Please enter a valid Gmail address ending with @gmail.com.");
     if (!REGEX.mobile.test(form.phone.trim())) return setErr("Mobile number must be exactly 10 digits and start with 6, 7, 8, or 9.");
-    if (form.password.length < 8) return setErr("Password must contain at least 8 characters.");
-    try { setBusy(true); const result = await registerCandidate(form); ensureRegistrationReminder(form); setVerificationStep(true); const devOtp = String(result || "").match(/DEV_OTP=(\d{6})/)?.[1]; setMsg(devOtp ? `Account created. Local test OTP: ${devOtp} (enable mail settings for real email delivery).` : "Account created. We sent a 6-digit verification OTP to your email."); }
-    catch (x) { setErr(x.message); } finally { setBusy(false); }
+    if (form.fullName.trim().length < 3 || form.fullName.trim().length > 100) return setErr("Full name must be between 3 and 100 characters.");
+    if (form.password.length < 8 || form.password.length > 30) return setErr("Password must be between 8 and 30 characters.");
+    if (!/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@#$%^&+=!]).*$/.test(form.password)) return setErr("Password must contain uppercase, lowercase, number and special character (@#$%^&+=!).");
+    if (!form.appliedRole) return setErr("Please select an applied role.");
+    if (!form.candidateType) return setErr("Please select a candidate type.");
+    try { setBusy(true); const result = await registerCandidate({ ...form, fullName: form.fullName.trim(), email: form.email.trim() }); ensureRegistrationReminder(form); setVerificationStep(true); const devOtp = String(result || "").match(/DEV_OTP=(\d{6})/)?.[1]; setMsg(devOtp ? `Account created. Local test OTP: ${devOtp} (enable mail settings for real email delivery).` : "Account created. We sent a 6-digit verification OTP to your email."); }
+    catch (x) { setErr(x.message || "Unable to complete registration. Please try again."); } finally { setBusy(false); }
   };
 
   const verify = async (e) => {
@@ -110,7 +114,7 @@ export default function CandidateRegister() {
               <option value="" disabled>{optionsLoading ? "Loading roles from backend..." : registrationOptions.appliedRoles.length ? "Select Applied IT Role" : "Backend unavailable - roles not loaded"}</option>
               {registrationOptions.appliedRoles.map((role) => <option key={role.value} value={role.value}>{formatRoleLabel(role.label)}</option>)}
             </select>
-            <input placeholder="Password (minimum 8 characters)" type="password" value={form.password} onChange={(e)=>set("password",e.target.value)} required />
+            <input placeholder="Password (8–30 chars: upper, lower, number, symbol)" type="password" value={form.password} onChange={(e)=>set("password",e.target.value)} required />
             <select aria-label="Candidate Type" value={form.candidateType} onChange={(e)=>set("candidateType",e.target.value)} required disabled={optionsLoading || !registrationOptions.candidateTypes.length}>
               {registrationOptions.candidateTypes.length
                 ? registrationOptions.candidateTypes.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)

@@ -1,6 +1,6 @@
-const BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080').trim().replace(/\/+$/, '');
+const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
 
-import { getToken } from './storage';
+const getToken = () => localStorage.getItem('verifyx_token');
 
 async function request(path, options = {}) {
   const isForm = options.body instanceof FormData;
@@ -9,22 +9,16 @@ async function request(path, options = {}) {
     ...(getToken() ? { Authorization: `Bearer ${getToken()}` } : {}),
     ...(options.headers || {}),
   };
-  let response;
-  try {
-    response = await fetch(`${BASE_URL}${path}`, { ...options, headers });
-  } catch (error) {
-    throw new Error(`Cannot connect to VerifyX backend at ${BASE_URL}. Check VITE_API_BASE_URL, backend availability, and CORS allowed origins. (${error.message})`);
-  }
+  const response = await fetch(`${BASE_URL}${path}`, { ...options, headers });
   const type = response.headers.get('content-type') || '';
   const payload = type.includes('application/json') ? await response.json() : await response.text();
   if (!response.ok) {
     const message = payload?.message || payload?.error || (typeof payload === 'string' ? payload : 'API request failed');
     const error = new Error(message);
-    error.status = response.status;
+    if (options.includeValidationDetails && payload?.data && typeof payload.data === 'object' && !Array.isArray(payload.data)) {
+      error.registrationFieldErrors = payload.data;
+    }
     throw error;
-  }
-  if (payload && typeof payload === 'object' && payload.success === false) {
-    throw new Error(payload.message || 'Backend rejected the request.');
   }
   return payload?.data ?? payload;
 }
@@ -44,9 +38,19 @@ async function requestBlob(path) {
 export const api = {
   registrationOptions: () => request('/api/auth/registration-options'),
   educationAutoFill: (documentType, file) => { const form = new FormData(); form.append('file', file); return request(`/api/education/auto-fill/${documentType}`, { method: 'POST', body: form }); },
-  candidateRegister: (body) => request('/api/auth/candidateRegister', { method: 'POST', body: JSON.stringify(body) }),
-  requestCandidatePasswordReset: (email) => request('/api/auth/forgot-password', { method: 'POST', body: JSON.stringify({ email }) }),
-  resetCandidatePassword: (body) => request('/api/auth/reset-password', { method: 'POST', body: JSON.stringify(body) }),
+  candidateRegister: async (body) => {
+    try {
+      return await request('/api/auth/candidateRegister', { method: 'POST', body: JSON.stringify(body), includeValidationDetails: true });
+    } catch (error) {
+      // Spring validation returns { message: "Validation failed", data: { field: message } }.
+      // Only the registration request needs field-level errors; other API handling stays unchanged.
+      if (error?.registrationFieldErrors) {
+        const details = Object.values(error.registrationFieldErrors).filter((value) => typeof value === 'string');
+        if (details.length) throw new Error(details.join(' '));
+      }
+      throw error;
+    }
+  },
   candidateLogin: (body) => request('/api/auth/candidateLogin', { method: 'POST', body: JSON.stringify(body) }),
   verifyCandidateEmail: (body) => request('/api/auth/candidate/verify-email', { method: 'POST', body: JSON.stringify(body) }),
   resendCandidateVerification: (email) => request(`/api/auth/candidate/resend-verification?email=${encodeURIComponent(email)}`, { method: 'POST' }),
