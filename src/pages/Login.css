@@ -367,3 +367,9 @@
     width: min(100%, 500px);
   }
 }
+
+/* Login negative-test validation feedback (LOG_002–LOG_009, LOG_017–LOG_018). */
+.vx-input-box.vx-input-invalid { border-color: #cb263a; }
+.vx-input-invalid:focus-within { border-color: #cb263a; box-shadow: 0 0 0 3px rgba(203,38,58,.10); }
+.vx-field-error { display: block; margin: 5px 0 0; color: #a91d2e; font-size: 11px; line-height: 1.35; }
+.vx-login-submit:disabled { opacity: .7; cursor: wait; }
