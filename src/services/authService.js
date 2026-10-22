@@ -16,7 +16,7 @@ export async function registerCandidate(data) {
 
 export async function loginCandidate(email, password) {
   const data = await api.candidateLogin({ email: String(email).trim().toLowerCase(), password });
-  if (!data?.accessToken) throw new Error('The login response did not include an access token. Please contact support.');
+  if (!data?.accessToken) throw new Error('Invalid email address or password. Please try again.');
   setToken(data.accessToken);
   const session = {
     type: 'CANDIDATE', id: data.userId, name: data.username,
@@ -30,7 +30,7 @@ export async function loginCandidate(email, password) {
 export async function loginAdmin(email, password) {
   const normalizedEmail = String(email || '').trim().toLowerCase();
   const data = await api.hrLogin({ email: normalizedEmail, password });
-  if (!data?.accessToken) throw new Error('The login response did not include an access token. Please contact support.');
+  if (!data?.accessToken) throw new Error('Invalid email address or password. Please try again.');
   setToken(data.accessToken);
   const session = {
     type: 'HR', name: data.username || data.name || 'HR Admin',
