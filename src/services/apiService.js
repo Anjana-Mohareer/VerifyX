@@ -69,6 +69,8 @@ export const api = {
   verifyCandidateEmail: (body) => request('/api/auth/candidate/verify-email', { method: 'POST', body: JSON.stringify(body) }),
   resendCandidateVerification: (email) => request(`/api/auth/candidate/resend-verification?email=${encodeURIComponent(email)}`, { method: 'POST' }),
   hrLogin: (body) => request('/api/auth/hrLogin', { method: 'POST', body: JSON.stringify(body) }),
+  requestCandidatePasswordReset: (email) => request('/api/auth/forgot-password', { method: 'POST', body: JSON.stringify({ email: String(email).trim().toLowerCase() }) }),
+  resetCandidatePassword: (body) => request('/api/auth/reset-password', { method: 'POST', body: JSON.stringify(body) }),
   requestHrPasswordReset: (email) => request(`/api/auth/hr/forgot-password?email=${encodeURIComponent(email)}`, { method: 'POST' }),
   resetHrPassword: (body) => request('/api/auth/hr/reset-password', { method: 'POST', body: JSON.stringify(body) }),
   me: () => request('/api/auth/me'),

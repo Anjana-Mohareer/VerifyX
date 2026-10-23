@@ -10,6 +10,7 @@ import {
   resetHrPasswordByIdentifier,
 } from "../services/authService";
 import { api } from '../services/apiService';
+import { getRememberLogin } from '../services/storage';
 import "./Login.css";
 
 export default function Login({ mode }) {
@@ -19,9 +20,8 @@ export default function Login({ mode }) {
   const isAdmin = mode === "admin";
   const [form, setForm] = useState({ email: "", password: "" });
   const [forgot, setForgot] = useState(false);
-  const [rememberMe, setRememberMe] = useState(false);
+  const [rememberMe, setRememberMe] = useState(() => getRememberLogin());
   const [showPassword, setShowPassword] = useState(false);
-  const [verificationMethod, setVerificationMethod] = useState("email");
   const [reset, setReset] = useState({ identifier: "", otp: "", newPassword: "", confirmPassword: "" });
   const [otpSent, setOtpSent] = useState(false);
   const [err, setErr] = useState("");
@@ -76,19 +76,18 @@ export default function Login({ mode }) {
 
   const sendResetOtp = async () => {
     const identifier = reset.identifier.trim();
-    if (!identifier) return setErr(`Enter your registered ${verificationMethod === "email" ? "email" : "phone number"}.`);
-    if (verificationMethod === "email" && !/^\S+@\S+\.\S+$/.test(identifier)) return setErr("Enter a valid registered email address.");
-    if (verificationMethod === "phone" && !/^\d{10}$/.test(identifier)) return setErr("Enter a valid 10-digit registered phone number.");
+    if (!identifier) return setErr("Enter your registered email address.");
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifier)) return setErr("Enter a valid registered email address.");
     try {
       const result = isAdmin
-        ? await requestHrPasswordResetByIdentifier(identifier, verificationMethod)
+        ? await requestHrPasswordResetByIdentifier(identifier, "email")
         : await requestCandidatePasswordReset(identifier);
       const devOtp = String(result || "").match(/DEV_OTP=(\d{6})/)?.[1];
       setOtpSent(true);
       if (devOtp) setReset((current) => ({ ...current, otp: devOtp }));
       setMsg(devOtp
         ? `Local verification OTP: ${devOtp}. Connect email/SMS delivery in the backend for production.`
-        : `A 6-digit OTP has been sent to your registered ${verificationMethod}.`);
+        : "If this address is registered, an OTP will be sent to your email.");
     } catch (x) { setErr(x.message); }
   };
 
@@ -99,11 +98,12 @@ export default function Login({ mode }) {
     if (reset.newPassword.length < 8) return setErr("Password must be at least 8 characters.");
     if (reset.newPassword !== reset.confirmPassword) return setErr("Passwords do not match.");
     try {
-      if (isAdmin) await resetHrPasswordByIdentifier(reset.identifier.trim(), reset.otp, reset.newPassword, verificationMethod);
-      else await resetCandidatePassword(reset.identifier.trim(), reset.otp, reset.newPassword);
+      if (isAdmin) await resetHrPasswordByIdentifier(reset.identifier.trim().toLowerCase(), reset.otp, reset.newPassword, "email");
+      else await resetCandidatePassword(reset.identifier.trim().toLowerCase(), reset.otp, reset.newPassword);
       setMsg("Password reset successfully. You can login now.");
+      setReset({ identifier: "", otp: "", newPassword: "", confirmPassword: "" });
       setForgot(false); setOtpSent(false);
-      if (verificationMethod === "email") setForm((f) => ({ ...f, email: reset.identifier.trim(), password: "" }));
+      setForm((f) => ({ ...f, email: reset.identifier.trim().toLowerCase(), password: "" }));
     } catch (x) { setErr(x.message); }
   };
 
@@ -123,7 +123,7 @@ export default function Login({ mode }) {
           </div>
           <h1>{forgot ? "Recover Your Account" : isAdmin ? "HR Login" : "Candidate Login"}</h1>
           <p className="vx-login-subtitle">{forgot
-            ? `Verify Your Registered Email Or Phone Number To create a new ${isAdmin ? "HR" : "candidate"} password.`
+            ? `Verify your registered email address to create a new ${isAdmin ? "HR" : "candidate"} password.`
             : isAdmin ? "Review candidate profiles, documents and verification requests" : "Continue your Profile, Documents and Verification Journey"}</p>
 
           {err && <div className="error vx-login-message" role="alert">{err}</div>}
@@ -150,20 +150,15 @@ export default function Login({ mode }) {
             </div>
 
             <div className="vx-login-options">
-              <label className="vx-remember-row"><input type="checkbox" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} />Remember Me</label>
-              <button type="button" className="vx-forgot-link" onClick={()=>{setForgot(true);setReset((r)=>({...r,identifier:form.email}))}}>Forgot Password?</button>
+              <label className="vx-remember-row" htmlFor="vx-remember-me"><input id="vx-remember-me" className="vx-remember-checkbox" type="checkbox" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} /><span>Remember Me</span></label>
+              <button type="button" className="vx-forgot-link" onClick={()=>{setErr("");setMsg("");setOtpSent(false);setForgot(true);setReset((r)=>({...r,identifier:form.email.trim().toLowerCase(),otp:"",newPassword:"",confirmPassword:""}))}}>Forgot Password?</button>
             </div>
 
             <button className="vx-login-submit" disabled={submitting}>{submitting ? "Logging in..." : "Login"}</button>
             {!isAdmin && <p className="vx-signup-line">Don’t have an account? <Link to="/candidate-register">Register</Link></p>}
           </> : <>
-            <div className="verification-tabs" role="tablist">
-              <button type="button" className={verificationMethod === "email" ? "active" : ""} onClick={()=>{setVerificationMethod("email");setOtpSent(false);}}>Email Verification</button>
-              <button type="button" className={verificationMethod === "phone" ? "active" : ""} onClick={()=>{setVerificationMethod("phone");setOtpSent(false);}}>Phone Verification</button>
-            </div>
-
-            <label className="vx-reset-label">Registered {verificationMethod === "email" ? "Email" : "Phone Number"}</label>
-            <input className="vx-reset-input" type={verificationMethod === "email" ? "email" : "tel"} inputMode={verificationMethod === "phone" ? "numeric" : undefined} maxLength={verificationMethod === "phone" ? 10 : undefined} placeholder={verificationMethod === "email" ? "name@example.com" : "10-digit mobile number"} value={reset.identifier} onChange={(e)=>setReset({...reset,identifier: verificationMethod === "phone" ? e.target.value.replace(/\D/g,"").slice(0,10) : e.target.value})} required />
+            <label className="vx-reset-label">Registered Email</label>
+            <input className="vx-reset-input" type="email" autoComplete="email" placeholder="name@example.com" value={reset.identifier} onChange={(e)=>setReset({...reset,identifier: e.target.value})} required />
             {otpSent && <>
               <label className="vx-reset-label">Verification OTP</label><input className="vx-reset-input" inputMode="numeric" maxLength={6} placeholder="6-digit OTP" value={reset.otp} onChange={(e)=>setReset({...reset,otp:e.target.value.replace(/\D/g,"").slice(0,6)})} required />
               <label className="vx-reset-label">New Password</label><input className="vx-reset-input" type="password" placeholder="Minimum 8 characters" value={reset.newPassword} onChange={(e)=>setReset({...reset,newPassword:e.target.value})} required />
