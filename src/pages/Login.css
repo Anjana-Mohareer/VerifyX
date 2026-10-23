@@ -373,3 +373,15 @@
 .vx-input-invalid:focus-within { border-color: #cb263a; box-shadow: 0 0 0 3px rgba(203,38,58,.10); }
 .vx-field-error { display: block; margin: 5px 0 0; color: #a91d2e; font-size: 11px; line-height: 1.35; }
 .vx-login-submit:disabled { opacity: .7; cursor: wait; }
+
+/* Login only: make the native Remember Me control visible in all themes. */
+.vx-login-options { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.vx-auth-login-card .vx-remember-row { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; color: #344054; white-space: nowrap; }
+.vx-auth-login-card .vx-remember-row input.vx-remember-checkbox {
+  display: inline-block !important; visibility: visible !important; opacity: 1 !important;
+  appearance: auto !important; -webkit-appearance: checkbox !important;
+  width: 17px !important; min-width: 17px !important; height: 17px !important;
+  margin: 0 !important; padding: 0 !important; position: static !important;
+  accent-color: #075bd8; pointer-events: auto; cursor: pointer;
+}
+.vx-auth-login-card .vx-remember-row input.vx-remember-checkbox:focus-visible { outline: 2px solid #075bd8; outline-offset: 2px; }
