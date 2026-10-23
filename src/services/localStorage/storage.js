@@ -7,14 +7,41 @@ const safeParse = (value, fallback) => {
   try { return JSON.parse(value) ?? fallback; } catch { return fallback; }
 };
 
-// Authentication state lives in memory only; reload requires logging in again.
-let activeSession = null;
-let activeToken = '';
+// Persist only the server-issued token and non-sensitive user identity.
+// Remember Me: localStorage survives browser restart; otherwise sessionStorage
+// survives refresh but ends when the tab/browser session closes.
+const AUTH_KEY = 'verifyx_auth_v2';
+const oldTokenKey = 'verifyx_token';
+const readAuth = (store) => {
+  try {
+    const parsed = JSON.parse(store.getItem(AUTH_KEY) || 'null');
+    if (!parsed || typeof parsed.token !== 'string' || !parsed.session) return null;
+    return parsed;
+  } catch { return null; }
+};
+const remembered = readAuth(localStorage);
+const tabSession = remembered ? null : readAuth(sessionStorage);
+let activeSession = (remembered || tabSession)?.session || null;
+let activeToken = (remembered || tabSession)?.token || '';
+let rememberLogin = Boolean(remembered);
+// Remove legacy token so it cannot override current authentication.
+try { localStorage.removeItem(oldTokenKey); } catch { /* storage disabled */ }
+const persistAuth = () => {
+  try {
+    localStorage.removeItem(AUTH_KEY);
+    sessionStorage.removeItem(AUTH_KEY);
+    if (activeSession && activeToken) {
+      (rememberLogin ? localStorage : sessionStorage).setItem(AUTH_KEY, JSON.stringify({token:activeToken, session:activeSession}));
+    }
+  } catch { /* Private browsing may block storage; memory login still works. */ }
+};
 export const getSession = () => activeSession;
-export const setSession = (session) => { activeSession = session; };
-export const clearSession = () => { activeSession = null; activeToken = ''; };
+export const setSession = (session) => { activeSession = session; persistAuth(); };
+export const clearSession = () => { activeSession = null; activeToken = ''; persistAuth(); };
 export const getToken = () => activeToken;
-export const setToken = (token) => { activeToken = token || ''; };
+export const setToken = (token) => { activeToken = token || ''; persistAuth(); };
+export const setRememberLogin = (enabled) => { rememberLogin = Boolean(enabled); persistAuth(); };
+export const getRememberLogin = () => rememberLogin;
 
 export const getLocalCandidates = () => safeParse(browserCache.getItem(KEYS.candidates), []);
 export const findLocalCandidate = (email) => getLocalCandidates().find((candidate) => candidate.email?.toLowerCase() === String(email || '').trim().toLowerCase()) || null;

@@ -1,5 +1,5 @@
 import { api } from './apiService';
-import { setSession, clearSession, getSession, setToken } from './storage';
+import { setSession, clearSession, getSession, setToken, setRememberLogin } from './storage';
 
 export async function registerCandidate(data) {
   const payload = {
@@ -14,9 +14,10 @@ export async function registerCandidate(data) {
   return api.candidateRegister(payload);
 }
 
-export async function loginCandidate(email, password) {
+export async function loginCandidate(email, password, rememberMe = false) {
   const data = await api.candidateLogin({ email: String(email).trim().toLowerCase(), password });
   if (!data?.accessToken) throw new Error('Invalid email address or password. Please try again.');
+  setRememberLogin(rememberMe);
   setToken(data.accessToken);
   const session = {
     type: 'CANDIDATE', id: data.userId, name: data.username,
@@ -27,10 +28,11 @@ export async function loginCandidate(email, password) {
   return session;
 }
 
-export async function loginAdmin(email, password) {
+export async function loginAdmin(email, password, rememberMe = false) {
   const normalizedEmail = String(email || '').trim().toLowerCase();
   const data = await api.hrLogin({ email: normalizedEmail, password });
   if (!data?.accessToken) throw new Error('Invalid email address or password. Please try again.');
+  setRememberLogin(rememberMe);
   setToken(data.accessToken);
   const session = {
     type: 'HR', name: data.username || data.name || 'HR Admin',
