@@ -1,6 +1,8 @@
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
 
-const getToken = () => localStorage.getItem('verifyx_token');
+// const getToken = () => localStorage.getItem('verifyx_token');
+import { getToken } from './localStorage/storage';
+
 
 async function request(path, options = {}) {
   const isForm = options.body instanceof FormData;
