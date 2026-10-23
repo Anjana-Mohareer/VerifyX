@@ -19,6 +19,7 @@ export default function Login({ mode }) {
   const isAdmin = mode === "admin";
   const [form, setForm] = useState({ email: "", password: "" });
   const [forgot, setForgot] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [verificationMethod, setVerificationMethod] = useState("email");
   const [reset, setReset] = useState({ identifier: "", otp: "", newPassword: "", confirmPassword: "" });
@@ -43,11 +44,11 @@ export default function Login({ mode }) {
     setSubmitting(true);
     try {
       isAdmin
-        ? await loginAdmin(email, form.password)
-        : await loginCandidate(email, form.password);
+        ? await loginAdmin(email, form.password, rememberMe)
+        : await loginCandidate(email, form.password, rememberMe);
       refresh();
       if (isAdmin) {
-        nav('/dashboard');
+        nav('/dashboard', { replace: true });
       } else {
         // Profile is sourced from backend; never infer registration from local browser data.
         try {
@@ -149,7 +150,7 @@ export default function Login({ mode }) {
             </div>
 
             <div className="vx-login-options">
-              <span className="vx-remember-row">For security, log in again after refreshing the page.</span>
+              <label className="vx-remember-row"><input type="checkbox" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} />Remember Me</label>
               <button type="button" className="vx-forgot-link" onClick={()=>{setForgot(true);setReset((r)=>({...r,identifier:form.email}))}}>Forgot Password?</button>
             </div>
 
