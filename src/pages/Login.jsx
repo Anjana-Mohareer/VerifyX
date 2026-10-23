@@ -20,18 +20,35 @@ export default function Login({ mode }) {
   const isAdmin = mode === "admin";
   const [form, setForm] = useState({ email: "", password: "" });
   const [forgot, setForgot] = useState(false);
-  // Always present the choice unchecked on a new page load.
-  // Existing authentication continues in this tab, but is no longer kept
-  // across browser restarts unless the user opts in again.
+  // An explicit choice is required on every fresh login page visit.
+  // Never restore checkbox selection from an earlier browsing session.
   const [rememberMe, setRememberMe] = useState(false);
   useEffect(() => {
+    // Remove any persistent application session when the login page is opened.
+    // Existing in-tab state is kept, so unrelated API/client functionality is untouched.
     setRememberLogin(false);
   }, []);
   const changeRememberMe = (enabled) => {
     setRememberMe(enabled);
-    // The storage helper saves only the authentication token/session, never a password.
-    // Unchecking moves the existing login out of persistent localStorage immediately.
-    setRememberLogin(enabled);
+    // Unchecking revokes persistent application storage immediately.
+    // Checking alone does not store credentials or activate persistence;
+    // persistence is chosen by authService only after successful login.
+    if (!enabled) setRememberLogin(false);
+  };
+  const offerBrowserPasswordSave = (email, password) => {
+    // Use the browser's protected credential manager, never localStorage or a cookie
+    // for the raw password. Unsupported browsers simply keep normal login behavior.
+    try {
+      if (typeof window === 'undefined' ||
+          typeof window.PasswordCredential !== 'function' ||
+          !navigator.credentials?.store) return;
+      const credential = new window.PasswordCredential({
+        id: email,
+        password,
+        name: email,
+      });
+      Promise.resolve(navigator.credentials.store(credential)).catch(() => {});
+    } catch { /* Browser/password-manager restrictions must not break login. */ }
   };
   const [showPassword, setShowPassword] = useState(false);
   const [reset, setReset] = useState({ identifier: "", otp: "", newPassword: "", confirmPassword: "" });
@@ -58,6 +75,9 @@ export default function Login({ mode }) {
       isAdmin
         ? await loginAdmin(email, form.password, rememberMe)
         : await loginCandidate(email, form.password, rememberMe);
+      // Never save a password merely by toggling the checkbox. Offer secure
+      // browser-managed saving only after an explicitly opted-in, successful login.
+      if (rememberMe) offerBrowserPasswordSave(email, form.password);
       refresh();
       if (isAdmin) {
         nav('/dashboard', { replace: true });
