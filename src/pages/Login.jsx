@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import useAuth from "../hooks/useAuth";
 import {
@@ -10,7 +10,7 @@ import {
   resetHrPasswordByIdentifier,
 } from "../services/authService";
 import { api } from '../services/apiService';
-import { getRememberLogin } from '../services/storage';
+import { setRememberLogin } from '../services/storage';
 import "./Login.css";
 
 export default function Login({ mode }) {
@@ -20,7 +20,19 @@ export default function Login({ mode }) {
   const isAdmin = mode === "admin";
   const [form, setForm] = useState({ email: "", password: "" });
   const [forgot, setForgot] = useState(false);
-  const [rememberMe, setRememberMe] = useState(() => getRememberLogin());
+  // Always present the choice unchecked on a new page load.
+  // Existing authentication continues in this tab, but is no longer kept
+  // across browser restarts unless the user opts in again.
+  const [rememberMe, setRememberMe] = useState(false);
+  useEffect(() => {
+    setRememberLogin(false);
+  }, []);
+  const changeRememberMe = (enabled) => {
+    setRememberMe(enabled);
+    // The storage helper saves only the authentication token/session, never a password.
+    // Unchecking moves the existing login out of persistent localStorage immediately.
+    setRememberLogin(enabled);
+  };
   const [showPassword, setShowPassword] = useState(false);
   const [reset, setReset] = useState({ identifier: "", otp: "", newPassword: "", confirmPassword: "" });
   const [otpSent, setOtpSent] = useState(false);
@@ -150,7 +162,7 @@ export default function Login({ mode }) {
             </div>
 
             <div className="vx-login-options">
-              <label className="vx-remember-row" htmlFor="vx-remember-me"><input id="vx-remember-me" className="vx-remember-checkbox" type="checkbox" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} /><span>Remember Me</span></label>
+              <label className="vx-remember-row" htmlFor="vx-remember-me"><input id="vx-remember-me" className="vx-remember-checkbox" type="checkbox" checked={rememberMe} onChange={(e) => changeRememberMe(e.target.checked)} /><span>Remember Me</span></label>
               <button type="button" className="vx-forgot-link" onClick={()=>{setErr("");setMsg("");setOtpSent(false);setForgot(true);setReset((r)=>({...r,identifier:form.email.trim().toLowerCase(),otp:"",newPassword:"",confirmPassword:""}))}}>Forgot Password?</button>
             </div>
 
