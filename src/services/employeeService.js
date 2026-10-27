@@ -1,5 +1,6 @@
 import { api } from './apiService';
 import { getDocumentRecords } from '../utils/documentRecords';
+import { readCandidateIdentity, mergeCandidateIdentity } from '../utils/identityFields';
 import { getLocalCandidates, removeLocalCandidate, fileToDataUrl, saveLocalCandidate } from './storage';
 import {
   getSubmittedApplications,
@@ -286,6 +287,7 @@ const normalize = (c = {}) => {
   const employment = c.employment || {};
   const review = c.review || {};
   const documentsSource = getDocumentRecords(c.documents).concat(getDocumentRecords(review));
+  const identityNumbers = readCandidateIdentity(c);
 
   return {
     ...profile,
@@ -302,9 +304,9 @@ const normalize = (c = {}) => {
     status: c.status ?? c.workflowStatus ?? profile.workflowStatus ?? c.applicationStatus ?? review.applicationStatus ?? 'DRAFT',
     profileStep: c.profileStep ?? profile.profileStep ?? 1,
     remarks: c.remarks ?? '',
-    pan: c.pan ?? c.panNumber ?? review.panNumber ?? profile.panNumber,
-    aadhaar: c.aadhaar ?? c.aadhaarNumber ?? review.aadhaarNumber ?? profile.aadhaarNumber,
-    uan: c.uan ?? c.uanNumber ?? review.uanNumber ?? employment.uanNumber,
+    pan: identityNumbers.pan,
+    aadhaar: identityNumbers.aadhaar,
+    uan: identityNumbers.uan,
     uanVerified: c.uanVerified ?? review.uanVerified ?? employment.uanVerified ?? false,
     uanVerificationStatus: c.uanVerificationStatus ?? review.uanVerificationStatus ?? employment.uanVerificationStatus ?? (c.uanVerified ? "VERIFIED" : "PENDING"),
     permanentAddress: buildPermanentAddress(c) || buildPermanentAddress(profile) || '',
@@ -346,7 +348,8 @@ export const allCandidates = async () => {
       list.map(async (candidate) => {
         const id = candidate.id ?? candidate.candidateId;
         if (!id) return candidate;
-        const [review, permanentContact, currentContact] = await Promise.all([
+        const [details, review, permanentContact, currentContact] = await Promise.all([
+          api.candidate(id).catch(() => null),
           api.reviewDocuments(id).catch(() => null),
           api.hrPermanentAddress(id).catch(() => null),
           api.hrCurrentAddress(id).catch(() => null),
@@ -355,8 +358,17 @@ export const allCandidates = async () => {
         const permanentAddress = permanentContact
           ? [permanentContact.permanentAddressLine1, permanentContact.permanentAddressLine2, permanentContact.permanentAreaLocality, permanentContact.permanentCity, permanentContact.permanentDistrict, permanentContact.permanentState, permanentContact.permanentPincode, permanentContact.permanentCountry].filter(Boolean).join(', ')
           : '';
+        const identityNumbers = mergeCandidateIdentity(candidate, details || {}, review || {});
         return {
           ...candidate,
+          // The HR list endpoint often omits identity numbers which are present
+          // in the candidate detail record. Never replace good list fields
+          // with empty detail values.
+          pan: identityNumbers.pan,
+          aadhaar: identityNumbers.aadhaar,
+          uan: identityNumbers.uan,
+          profile: details?.profile || candidate.profile,
+          employment: details?.employment || details?.employmentDetails || candidate.employment,
           review,
           contact,
           documents: getDocumentRecords(review).concat(getDocumentRecords(candidate.documents)),
@@ -469,10 +481,14 @@ export const findCandidate = async (id) => {
     const summaryCandidate = candidateList.find(
       (candidate) => String(candidate.id ?? candidate.candidateId ?? '') === String(id)
     );
+    const identityNumbers = mergeCandidateIdentity(summaryCandidate || {}, details, review || {});
 
     const normalized = normalize({
       ...(summaryCandidate || {}),
       ...details,
+      pan: identityNumbers.pan,
+      aadhaar: identityNumbers.aadhaar,
+      uan: identityNumbers.uan,
       candidateId: Number(id),
       // Preserve skills from the HR candidate-list response when the detail
       // endpoint omits them. The detail response still wins for all fields it
