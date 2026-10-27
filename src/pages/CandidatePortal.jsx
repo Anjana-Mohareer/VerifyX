@@ -17,7 +17,7 @@ const getExpectedDocuments = (application = {}) => {
   if (!experienced) return ['Resume', 'Aadhaar Card', 'PAN Card'];
   const working = String(safeApplication.employmentStatus || '').toUpperCase() === 'CURRENTLY_WORKING';
   return working
-    ? ['Resume', 'Aadhaar Card', 'PAN Card', 'Current Offer / Appointment Letter', 'Latest Salary Slip', 'UAN Proof']
+    ? ['Resume', 'Aadhaar Card', 'PAN Card', 'Latest Salary Slip', 'UAN Proof']
     : ['Resume', 'Aadhaar Card', 'PAN Card', 'Experience Letter', 'Relieving Letter', 'Last Salary Slip', 'UAN Proof'];
 };
 
@@ -67,7 +67,11 @@ export default function CandidatePortal(){
     const saved = getApplication(identity);
     const draft = saved;
     const local = findLocalCandidate(session?.email) || {};
-    setApplication(saved || (draft ? {
+    setApplication(saved ? {
+      ...saved,
+      phone: saved.phone || local.phone || session?.phone || '',
+      appliedRole: saved.appliedRole || local.appliedRole || session?.appliedRole || '',
+    } : (draft ? {
       ...draft,
       fullName: draft.fullName || local.fullName || session?.name,
       email: local.email || session?.email,
@@ -125,12 +129,12 @@ export default function CandidatePortal(){
   const requiredNames = useMemo(()=>{
     if (!application) return [];
     if(Array.isArray(application?.requiredDocumentNames) && application.requiredDocumentNames.length) return application.requiredDocumentNames;
-    const uploadedKeys = Object.keys(application?.requiredDocuments || {});
-    return [...new Set([...getExpectedDocuments(application), ...uploadedKeys])];
+    return getExpectedDocuments(application);
   },[application]);
-  const uploadedNames = useMemo(()=>Object.entries(application?.requiredDocuments || {}).filter(([,v])=>filled(v?.fileName)).map(([k])=>k),[application]);
+  const uploadedNames = useMemo(()=>Object.entries(application?.requiredDocuments || {}).filter(([,v])=>filled(v?.fileName) && v?.verificationStatus !== 'FAILED').map(([k])=>k),[application]);
   const pendingNames = requiredNames.filter((name)=>!uploadedNames.includes(name));
-  const docPercent = requiredNames.length ? Math.round((uploadedNames.length/requiredNames.length)*100) : 0;
+  const uploadedRequiredCount = requiredNames.filter((name)=>uploadedNames.includes(name)).length;
+  const docPercent = requiredNames.length ? Math.round((uploadedRequiredCount/requiredNames.length)*100) : 0;
   const statusText = String(application?.status || '').toUpperCase();
   const submitted = statusText.includes('SUBMITTED') || statusText.includes('PENDING_VERIFICATION') || statusText.includes('VERIFIED') || statusText.includes('REJECTED');
   const overall = submitted ? 100 : Number(application?.overallCompletion || Math.min(95, docPercent));
@@ -185,7 +189,7 @@ export default function CandidatePortal(){
         <section className="candidate-stat-grid">
           <DashboardCard icon="✓" label="Application Status" value={submitted?'Submitted':'Draft'} hint={submitted?`ID: ${application.applicationId || 'Generated'}`:'Not submitted yet'} cls="status" />
           <DashboardCard icon="◔" label="Profile Completion" value={`${overall}%`} hint={overall===100?'Profile completed':'Continue remaining details'} progress={overall} cls="profile" />
-          <DashboardCard icon="↑" label="Documents Uploaded" value={`${uploadedNames.length}/${requiredNames.length || uploadedNames.length}`} hint={`${docPercent}% of required documents`} progress={docPercent} cls="uploaded" />
+          <DashboardCard icon="↑" label="Documents Uploaded" value={`${uploadedRequiredCount}/${requiredNames.length}`} hint={`${docPercent}% of required documents (optional files excluded)`} progress={docPercent} cls="uploaded" />
           <DashboardCard icon="!" label="Pending Documents" value={String(pendingNames.length)} hint={pendingNames.length?pendingNames.slice(0,2).join(', '):'No pending documents'} cls="pending" />
         </section>
 
@@ -211,8 +215,8 @@ export default function CandidatePortal(){
           <ProfileMini icon="▤" tone="violet" title="12th / PUC" value={application.education12?.institution || application.twelfth?.institution || application.twelfth?.collegeName || 'Not Added'} sub={application.education12?.passingYear || application.twelfth?.passingYear || ''}/>
           <ProfileMini icon="✥" tone="green" title="Degree" value={application.degree?.degree || application.degree?.institution || 'Not Added'} sub={application.degree?.specialization || application.degree?.passingYear || ''}/>
           <ProfileMini icon="🎓" tone="orange" title="Master's" value={application.masters?.degree || application.master?.degree || application.masters?.institution || 'Not Added'} sub={application.masters?.specialization || application.master?.specialization || ''}/>
-          <ProfileMini icon="▣" tone="purple" title="Current Employer" value={application.currentEmployer?.companyName || application.currentEmployerName || 'Not Added'} sub={application.currentEmployer?.designation || application.currentDesignation || ''}/>
-          <ProfileMini icon="♧" tone="cyan" title="Previous Employer" value={application.previousEmployer?.companyName || application.previousEmployerName || 'Not Added'} sub={application.previousEmployer?.designation || application.previousDesignation || ''}/>
+          <ProfileMini icon="▣" tone="purple" title="Current Employer" value={application.currentEmployer?.companyName || application.currentEmployerName || application.currentEmployer || 'Not Added'} sub={application.currentEmployer?.designation || application.currentDesignation || ''}/>
+          <ProfileMini icon="♧" tone="cyan" title="Previous Employer" value={application.previousEmployer?.companyName || application.previousEmployerName || application.previousEmployer || 'Not Added'} sub={application.previousEmployer?.designation || application.previousDesignation || ''}/>
         </div>
       </section>}
 

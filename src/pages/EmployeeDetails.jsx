@@ -50,6 +50,8 @@ function canonicalDocumentName(name = '') {
   if (value.includes('pan')) return 'pancard';
   if (value.includes('uan')) return 'uanproof';
   if (value.includes('resume')) return 'resume';
+  if (value.includes('passport')) return 'passport';
+  if (value.includes('visa')) return 'visa';
   return value;
 }
 
@@ -110,7 +112,7 @@ function formatFieldLabel(key) {
     permanentAddress: "Permanent Address",
     currentResidentialAddress: "Current Residential Address",
     emergencyContactNumber: "Emergency Contact Number",
-    referenceNumber: "Reference Number",
+    referenceNumber: "Referral Contact Number",
   };
 
   if (labels[key]) return labels[key];
@@ -448,7 +450,7 @@ Ask the candidate to upload them.`
             <p><b>Permanent Address:</b> {c.permanentAddress || "Not Added"}</p>
             <p><b>Current Residential Address:</b> {c.currentResidentialAddress || "Not Added"}</p>
             <p><b>Emergency Contact Number:</b> {c.emergencyContactNumber || "Not Added"}</p>
-            <p><b>Reference Number:</b> {c.referenceNumber || "Optional / Not Added"}</p>
+            <p><b>Referral Contact Number:</b> {c.referenceNumber || "Optional / Not Added"}</p>
           </div>
         </section>
 

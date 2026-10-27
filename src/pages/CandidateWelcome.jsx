@@ -8,6 +8,7 @@ import { getApplication, saveApplication, submitApplication } from '../services/
 import { sendApplicationSubmittedMail, sendProfileCompletionReminder } from '../services/mailService';
 import { addNotification, ensureRegistrationReminder } from '../services/notificationService';
 import { IT_SKILLS, IT_TOOLS, getRoleRecommendations } from '../utils/constants';
+import { hasTravelDocument, getDocumentRecords, documentName } from '../utils/documentRecords';
 import SkillMultiSelect from '../components/SkillMultiSelect';
 import './CandidateWelcome.css';
 import verifyXLogo from '../assets/verify-x-full-logo.png';
@@ -230,29 +231,75 @@ export default function CandidateWelcome() {
   const uploadOptionalDocument = async (field, file) => {
     if (!file) return;
     const maxBytes = 5 * 1024 * 1024;
-    if (file.size > maxBytes) { setSavedMessage(`${field === 'passportDocument' ? 'Passport' : 'Visa'} document must be 5 MB or smaller.`); return; }
+    const documentLabel = field === 'passportDocument' ? 'Passport' : 'Visa';
+    const extension = file.name.split('.').pop().toLowerCase();
+    if (!file.size || !['pdf', 'png', 'jpg', 'jpeg'].includes(extension)) { setSavedMessage(`${documentLabel} must be a non-empty PDF, JPG or PNG.`); return; }
+    if (file.size > maxBytes) { setSavedMessage(`${documentLabel} document must be 5 MB or smaller.`); return; }
     try {
+      // HR uses server-side document review, so merely retaining this file in
+      // candidate component state cannot make it visible to HR.
+      const upload = new FormData();
+      upload.append(field === 'passportDocument' ? 'passport' : 'visa', file);
+      await api.uploadDocuments(upload);
+      const stored = await api.myDocuments();
+      if (!hasTravelDocument(stored, documentLabel)) {
+        throw new Error(`The upload endpoint did not return a saved ${documentLabel} document. Please check that the backend accepts this file field and includes it in /upload/my-documents.`);
+      }
       const dataUrl = await readFileAsDataUrl(file);
       setForm((f) => ({ ...f, [field]: { fileName: file.name, size: file.size, type: file.type || '', dataUrl, uploadedAt: new Date().toISOString() } }));
-      setSavedMessage(`${file.name} uploaded.`);
-    } catch { setSavedMessage('Unable to read that file. Please try again.'); }
+      setSavedMessage(`${documentLabel} uploaded to the server. It can now be reviewed by HR.`);
+    } catch (error) { setSavedMessage(`${documentLabel} was not saved to the server: ${error?.message || 'Please retry.'}`); }
   };
-  const removeOptionalDocument = (field) => setForm((f) => ({ ...f, [field]: null }));
+  const removeUploadedFromServer = async (name) => {
+    const records = getDocumentRecords(await api.myDocuments());
+    const key = name.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const fieldKey = String(BACKEND_DOCUMENT_FIELDS[name] || name).toLowerCase().replace(/[^a-z0-9]/g, '');
+    const matching = records.find((item) => {
+      const type = documentName(item);
+      return type && (type.includes(key) || key.includes(type) || type.includes(fieldKey) || fieldKey.includes(type));
+    });
+    if (!matching) return;
+    const documentId = matching.id || matching.documentId || matching.fileId;
+    if (!documentId) throw new Error('Server document ID is unavailable. Cannot remove this uploaded file safely.');
+    await api.deleteUploadedDocument(documentId);
+    const remaining = getDocumentRecords(await api.myDocuments());
+    if (remaining.some((item) => String(item.id || item.documentId || item.fileId) === String(documentId))) {
+      throw new Error('The backend still reports this document as uploaded. Please try again.');
+    }
+  };
+  const removeOptionalDocument = async (field) => {
+    const name = field === 'passportDocument' ? 'Passport' : 'Visa';
+    if (!window.confirm(`Remove the uploaded ${name} document?`)) return;
+    try {
+      await removeUploadedFromServer(name);
+      setForm((f) => ({ ...f, [field]: null }));
+      setSavedMessage(`${name} document removed.`);
+    } catch (error) { setSavedMessage(error?.message || `Unable to remove ${name}.`); }
+  };
 
   const extractEducationFile = async (section, documentType, file) => {
     if (!file) return;
+    const extension = file.name.split('.').pop().toLowerCase();
+    if (!['pdf', 'jpg', 'jpeg', 'png'].includes(extension) || !file.size || file.size > 5 * 1024 * 1024) {
+      setMessage('Please upload a non-empty PDF/JPG/PNG marksheet no larger than 5 MB.');
+      return;
+    }
     setExtracting(true);
     setMessage(`Reading ${section === 'tenth' ? '10th / SSLC' : section === 'twelfth' ? '12th / PUC' : 'Degree'} document and filling available fields…`);
     setEdu(section, 'marksheetName', file.name);
     try {
-      const data = await api.educationAutoFill(documentType, file);
+      const response = await api.educationAutoFill(documentType, file);
+      const data = response?.extractedData || response?.education || response?.result || response || {};
+      if (!data || typeof data !== 'object' || !Object.values(data).some((value) => value != null && String(value).trim())) {
+        throw new Error('No readable details were returned. Please enter the marksheet details manually.');
+      }
       setForm((f) => ({
         ...f,
         tenth: section === 'tenth' ? { ...f.tenth, institution: data.tenthSchoolName || f.tenth.institution, boardUniversity: data.tenthBoard || f.tenth.boardUniversity, location: data.tenthSchoolLocation || f.tenth.location, registrationNumber: data.tenthRollNumber || f.tenth.registrationNumber, passingYear: data.tenthPassingYear ? String(data.tenthPassingYear) : f.tenth.passingYear, percentage: data.tenthPercentage != null ? String(data.tenthPercentage) : f.tenth.percentage, marksheetName: file.name } : f.tenth,
         twelfth: section === 'twelfth' ? { ...f.twelfth, institution: data.twelfthInstitutionName || f.twelfth.institution, boardUniversity: data.twelfthBoardUniversity || f.twelfth.boardUniversity, location: data.twelfthLocation || f.twelfth.location, registrationNumber: data.twelfthRegistrationNumber || f.twelfth.registrationNumber, passingYear: data.twelfthPassingYear ? String(data.twelfthPassingYear) : f.twelfth.passingYear, percentage: data.twelfthPercentage != null ? String(data.twelfthPercentage) : f.twelfth.percentage, marksheetName: file.name } : f.twelfth,
         degree: section === 'degree' ? { ...f.degree, degree: data.degreeName || f.degree.degree, specialization: data.specialization || f.degree.specialization, institution: data.collegeName || f.degree.institution, boardUniversity: data.universityName || f.degree.boardUniversity, location: data.degreeLocation || f.degree.location, registrationNumber: data.usnNumber || f.degree.registrationNumber, startYear: data.degreeStartYear ? String(data.degreeStartYear) : f.degree.startYear, endYear: data.degreeEndYear ? String(data.degreeEndYear) : f.degree.endYear, percentage: data.degreePercentage != null ? String(data.degreePercentage) : f.degree.percentage, marksheetName: file.name } : f.degree,
       }));
-      setMessage('Document uploaded and available education fields were filled automatically. Please review them.');
+      setMessage('Education extraction completed. Review the auto-filled fields against your marksheet before submitting.');
     } catch (error) {
       setMessage(error.message || 'Unable to extract this document automatically.');
     } finally { setExtracting(false); }
@@ -417,6 +464,12 @@ export default function CandidateWelcome() {
 
   const addRequiredDocument = async (name, file) => {
     if (!file) return;
+    const allowed = name === 'Resume' ? ['pdf', 'doc', 'docx'] : ['pdf', 'png', 'jpg', 'jpeg'];
+    const extension = file.name.split('.').pop().toLowerCase();
+    if (!allowed.includes(extension) || !file.size) {
+      setSavedMessage(`${name}: Select a non-empty ${allowed.map((ext) => ext.toUpperCase()).join('/')} file.`);
+      return;
+    }
     const maxBytes = 5 * 1024 * 1024;
     if (file.size > maxBytes) {
       setSavedMessage(`${name} must be 5 MB or smaller.`);
@@ -434,7 +487,7 @@ export default function CandidateWelcome() {
     const result = await automaticallyVerifyCandidateDocument({ documentName: name, file, metadata: { fileName: file.name, size: file.size, type: file.type || '' }, ...numbers });
 
     const backendField = BACKEND_DOCUMENT_FIELDS[name];
-    if (backendField) {
+    if (backendField && result.ok) {
       try {
         const backendForm = new FormData();
         backendForm.append(backendField, file);
@@ -460,11 +513,18 @@ export default function CandidateWelcome() {
     setSavedMessage(result.ok ? `${name} Verified Automatically.` : `${name}: ${result.message}`);
   };
 
-  const removeRequiredDocument = (name) => setForm((f) => {
-    const next = { ...f.requiredDocuments };
-    delete next[name];
-    return { ...f, requiredDocuments: next };
-  });
+  const removeRequiredDocument = async (name) => {
+    if (!window.confirm(`Remove ${name}? You can upload the correct file again.`)) return;
+    try {
+      await removeUploadedFromServer(name);
+      setForm((f) => {
+        const next = { ...f.requiredDocuments };
+        delete next[name];
+        return { ...f, requiredDocuments: next };
+      });
+      setSavedMessage(`${name} removed. Please upload a new file if required.`);
+    } catch (error) { setSavedMessage(error?.message || `Unable to remove ${name}.`); }
+  };
 
   const persist = (complete = false) => {
     saveApplication(identity, { ...form, status: complete ? 'COMPLETE' : 'DRAFT' });
@@ -595,7 +655,7 @@ export default function CandidateWelcome() {
     const localCandidate = findLocalCandidate(session?.email) || {};
     const submitted = submitApplication(identity, {
       ...form,
-      appliedRole: session?.appliedRole || localCandidate.appliedRole || '',
+      appliedRole: form.appliedRole || session?.appliedRole || localCandidate.appliedRole || '',
       informationComplete: true,
       documentCompletion: 100,
       overallCompletion: 100,
@@ -795,7 +855,7 @@ export default function CandidateWelcome() {
                 return <article className={`required-document-card ${uploaded ? 'uploaded' : ''} ${status ? status.toLowerCase() : ''}`} key={doc.name}>
                   <div className="required-doc-icon">{status === 'VERIFIED' ? '✓' : status === 'FAILED' ? '!' : isChecking ? '⟳' : uploaded ? '↻' : '📄'}</div>
                   <div className="required-doc-copy"><b>{doc.name}{doc.optional && <em className="optional-doc-label"> Optional</em>}</b><span>{uploaded?.fileName || doc.hint}</span>{uploaded && <small className={`doc-verification-text ${status.toLowerCase()}`}>{status === 'VERIFIED' ? 'Verified automatically for submission' : status === 'FAILED' ? uploaded.verificationMessage : isChecking ? 'Automatic verification in progress…' : 'Uploaded • automatic check pending'}</small>}</div>
-                  {uploaded ? <button type="button" className="remove-required-doc" onClick={()=>removeRequiredDocument(doc.name)}>Replace</button> : null}
+                  {uploaded ? <button type="button" className="remove-required-doc" onClick={()=>removeRequiredDocument(doc.name)}>Remove</button> : null}
                   <label className="required-doc-upload"><input type="file" accept={doc.accept} onChange={(e)=>addRequiredDocument(doc.name,e.target.files?.[0])}/><span>{uploaded ? 'Choose another file' : 'Upload'}</span></label>
                 </article>;
               })}

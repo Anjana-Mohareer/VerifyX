@@ -11,6 +11,7 @@ import {
 } from "../services/authService";
 import { api } from '../services/apiService';
 import { setRememberLogin } from '../services/storage';
+import { readRememberedCredentials, saveRememberedCredentials, forgetCredentials } from '../services/rememberedCredentials';
 import "./Login.css";
 
 export default function Login({ mode }) {
@@ -18,42 +19,41 @@ export default function Login({ mode }) {
   const location = useLocation();
   const { refresh } = useAuth();
   const isAdmin = mode === "admin";
-  const [form, setForm] = useState({ email: "", password: "" });
+  const rememberedCredentialsKey = `verifyx_remembered_credentials_${isAdmin ? 'hr' : 'candidate'}`;
+  const [form, setForm] = useState({ email: '', password: '' });
   const [forgot, setForgot] = useState(false);
   // An explicit choice is required on every fresh login page visit.
   // Never restore checkbox selection from an earlier browsing session.
   const [rememberMe, setRememberMe] = useState(false);
   useEffect(() => {
+    let active = true;
     // Remove any persistent application session when the login page is opened.
     // Existing in-tab state is kept, so unrelated API/client functionality is untouched.
     setRememberLogin(false);
-  }, []);
+    // The checkbox resets on every login visit. Saved credentials are not
+    // removed by logout; a returning user can opt in again at any time.
+    setRememberMe(false);
+    setForm({ email: '', password: '' });
+    readRememberedCredentials(rememberedCredentialsKey).then((credentials) => {
+      if (active) setForm(credentials);
+    });
+    return () => { active = false; };
+  }, [rememberedCredentialsKey]);
   const changeRememberMe = (enabled) => {
     setRememberMe(enabled);
-    // Unchecking revokes persistent application storage immediately.
-    // Checking alone does not store credentials or activate persistence;
-    // persistence is chosen by authService only after successful login.
-    if (!enabled) setRememberLogin(false);
-  };
-  const offerBrowserPasswordSave = (email, password) => {
-    // Use the browser's protected credential manager, never localStorage or a cookie
-    // for the raw password. Unsupported browsers simply keep normal login behavior.
-    try {
-      if (typeof window === 'undefined' ||
-          typeof window.PasswordCredential !== 'function' ||
-          !navigator.credentials?.store) return;
-      const credential = new window.PasswordCredential({
-        id: email,
-        password,
-        name: email,
-      });
-      Promise.resolve(navigator.credentials.store(credential)).catch(() => {});
-    } catch { /* Browser/password-manager restrictions must not break login. */ }
+    if (!enabled) {
+      // Revoking consent removes previously remembered credentials immediately.
+      forgetCredentials(rememberedCredentialsKey);
+      setRememberLogin(false);
+      return;
+    }
+    // Checking the box only grants consent. Saving happens after successful login.
   };
   const [showPassword, setShowPassword] = useState(false);
   const [reset, setReset] = useState({ identifier: "", otp: "", newPassword: "", confirmPassword: "" });
   const [otpSent, setOtpSent] = useState(false);
   const [err, setErr] = useState("");
+  const [accountNotFound, setAccountNotFound] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [msg, setMsg] = useState(location.state?.message || "");
@@ -61,7 +61,7 @@ export default function Login({ mode }) {
   const submit = async (e) => {
     e.preventDefault();
     if (submitting) return;
-    setErr(""); setMsg("");
+    setErr(""); setMsg(""); setAccountNotFound(false);
     const email = form.email.trim().toLowerCase();
     const errors = {};
     if (!email) errors.email = "Please enter your email address.";
@@ -75,9 +75,18 @@ export default function Login({ mode }) {
       isAdmin
         ? await loginAdmin(email, form.password, rememberMe)
         : await loginCandidate(email, form.password, rememberMe);
-      // Never save a password merely by toggling the checkbox. Offer secure
-      // browser-managed saving only after an explicitly opted-in, successful login.
-      if (rememberMe) offerBrowserPasswordSave(email, form.password);
+      // Only a successful, opted-in login saves the encrypted password.
+      // Keep HR and candidate accounts separate.
+      try {
+        if (rememberMe) {
+          await saveRememberedCredentials(rememberedCredentialsKey, email, form.password);
+        } else {
+          forgetCredentials(rememberedCredentialsKey);
+        }
+      } catch {
+        // Authentication is still valid if the browser blocks secure storage.
+        forgetCredentials(rememberedCredentialsKey);
+      }
       refresh();
       if (isAdmin) {
         nav('/dashboard', { replace: true });
@@ -87,8 +96,9 @@ export default function Login({ mode }) {
           const profile = await api.candidateProfile();
           nav(profile && Object.keys(profile).length ? '/candidate' : '/candidate-welcome', { replace: true });
         } catch (profileError) {
-          if (profileError?.status === 404) nav('/candidate-welcome', { replace: true });
-          else setErr(profileError?.message || 'Unable to load your profile from the server.');
+          // Credentials have already been accepted; a temporary profile error
+          // must not leave an authenticated candidate on the login form.
+          nav(profileError?.status === 404 ? '/candidate-welcome' : '/candidate', { replace: true });
         }
       }
     } catch (x) {
@@ -96,9 +106,15 @@ export default function Login({ mode }) {
       // backend implementations that return 400/404/422 instead of 401.
       const status = x?.status;
       const serverMessage = String(x?.message || '');
+      // Only display a registration prompt when the backend explicitly says
+      // the account is missing. Wrong passwords must retain the generic error.
+      const missingAccount = /(?:user|account|email|candidate|hr)\s+(?:does not exist|not found|not registered|doesn't exist)|(?:no (?:user|account|candidate|hr) (?:found|exists))|(?:unregistered (?:user|email|account))/i.test(serverMessage);
       const rejectedCredentials = [400, 401, 403, 404, 422].includes(status)
         || /invalid credentials|invalid (email|password)|wrong password|user not found|account not found|email not (found|registered)|unregistered|bad credentials|authentication failed/i.test(serverMessage);
-      setErr(rejectedCredentials
+      setAccountNotFound(missingAccount);
+      setErr(missingAccount
+        ? 'Oops! Looks like your VerifyX journey hasn’t started yet 😄 Please register first!'
+        : rejectedCredentials
         ? 'Invalid email address or password. Please try again.'
         : serverMessage || 'Unable to login. Please try again.');
     } finally {
@@ -136,7 +152,15 @@ export default function Login({ mode }) {
       setReset({ identifier: "", otp: "", newPassword: "", confirmPassword: "" });
       setForgot(false); setOtpSent(false);
       setForm((f) => ({ ...f, email: reset.identifier.trim().toLowerCase(), password: "" }));
-    } catch (x) { setErr(x.message); }
+    } catch (x) {
+      const detail = String(x?.message || '');
+      const passwordPolicyIssue = /password.*(weak|must contain|policy|requirements|too short|minimum length)/i.test(detail);
+      const otpProblem = !passwordPolicyIssue && ( /otp|verification code|one.time|expired|invalid (email|mail|password)|bad credentials|incorrect code/i.test(detail)
+        || [400, 401, 403, 422].includes(x?.status));
+      setErr(otpProblem
+        ? (/expir/i.test(detail) ? 'OTP has expired. Please request a new OTP.' : 'Invalid OTP. Please check the code and try again.')
+        : detail || 'Unable to reset password. Please try again.');
+    }
   };
 
   const resetForgotState = () => {
@@ -149,7 +173,7 @@ export default function Login({ mode }) {
       <aside className="vx-login-illustration" aria-hidden="true" />
 
       <section className="vx-login-form-area">
-        <form noValidate className="vx-auth-login-card" onSubmit={forgot ? handleForgotPassword : submit}>
+        <form noValidate autoComplete="off" className="vx-auth-login-card" onSubmit={forgot ? handleForgotPassword : submit}>
           <div className="vx-login-brand">
             <img src="/verify-x-logo.svg" alt="VerifyX" />
           </div>
@@ -158,7 +182,7 @@ export default function Login({ mode }) {
             ? `Verify your registered email address to create a new ${isAdmin ? "HR" : "candidate"} password.`
             : isAdmin ? "Review candidate profiles, documents and verification requests" : "Continue your Profile, Documents and Verification Journey"}</p>
 
-          {err && <div className="error vx-login-message" role="alert">{err}</div>}
+          {err && <div className="error vx-login-message" role="alert">{err}{accountNotFound && !isAdmin && <> <Link to="/candidate-register" state={{ email: form.email.trim() }}>Register here</Link></>}</div>}
           {msg && <div className="success vx-login-message">{msg}</div>}
 
           {!forgot ? <>
@@ -175,7 +199,7 @@ export default function Login({ mode }) {
               <span className="vx-input-icon vx-key-icon" aria-hidden="true">◆</span>
               <div className="vx-input-content">
                 <label htmlFor="login-password">Password</label>
-                <input id="login-password" type={showPassword ? "text" : "password"} autoComplete="current-password" placeholder="••••••••••" value={form.password} onChange={(e)=>{setForm((f)=>({...f,password:e.target.value}));setFieldErrors((f)=>({...f,password:""}));if(err)setErr("");}} aria-invalid={!!fieldErrors.password} aria-describedby={fieldErrors.password ? "login-password-error" : undefined} required />
+                <input id="login-password" type={showPassword ? "text" : "password"} autoComplete="off" placeholder="••••••••••" value={form.password} onChange={(e)=>{const nextPassword=e.target.value;setForm((f)=>({...f,password:nextPassword}));if(!nextPassword.trim() && rememberMe)changeRememberMe(false);setFieldErrors((f)=>({...f,password:""}));if(err)setErr("");}} aria-invalid={!!fieldErrors.password} aria-describedby={fieldErrors.password ? "login-password-error" : undefined} required />
                 {fieldErrors.password && <span id="login-password-error" className="vx-field-error" role="alert">{fieldErrors.password}</span>}
               </div>
               <button type="button" className="vx-password-toggle" aria-label={showPassword ? "Hide password" : "Show password"} onClick={()=>setShowPassword(!showPassword)}>{showPassword ? "◉" : "⊙"}</button>

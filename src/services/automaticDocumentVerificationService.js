@@ -12,6 +12,7 @@ const EXTENSION_RULES = {
 };
 
 const getExtension = (name = '') => String(name).split('.').pop().toLowerCase();
+const FILE_MIME = { pdf: ['application/pdf'], png: ['image/png'], jpg: ['image/jpeg'], jpeg: ['image/jpeg'], doc: ['application/msword'], docx: ['application/vnd.openxmlformats-officedocument.wordprocessingml.document'] };
 const PAN_REGEX = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const DIGITS_12 = /^\d{12}$/;
 
@@ -23,7 +24,9 @@ function localAutomaticCheck({ documentName, file, metadata = {}, panNumber = ''
 
   if (!fileName) return { ok: false, message: 'No document uploaded' };
   if (!allowed.includes(extension)) return { ok: false, message: `Unsupported file type .${extension || 'unknown'}` };
+  if (!size) return { ok: false, message: 'The uploaded file is empty' };
   if (size && size > 5 * 1024 * 1024) return { ok: false, message: 'File exceeds the 5 MB limit' };
+  if (file?.type && !FILE_MIME[extension]?.includes(file.type)) return { ok: false, message: 'The file content type does not match its extension' };
 
   if (documentName === 'PAN Card' && !PAN_REGEX.test(String(panNumber || '').toUpperCase())) {
     return { ok: false, message: 'PAN number does not match the required format' };
@@ -45,6 +48,8 @@ function localAutomaticCheck({ documentName, file, metadata = {}, panNumber = ''
 
 export async function automaticallyVerifyCandidateDocument(args) {
   const { documentName, file } = args;
+  const localResult = localAutomaticCheck(args);
+  if (!localResult.ok) return localResult;
   if (file) {
     try {
       const formData = new FormData();

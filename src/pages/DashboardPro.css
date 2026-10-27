@@ -1557,3 +1557,21 @@
     flex:0 0 auto!important;
   }
 }
+/* Search feedback and keyboard-accessible candidate-list shortcut. */
+.hr-search-highlight{background:#fff0a6;color:#25365b;border-radius:3px;padding:0 1px}
+.hr-candidates-jump{cursor:pointer;border:0;font:inherit}
+#hr-candidates-table{scroll-margin-top:24px}
+/* HR uploaded-document checklist, including optional Passport/Visa records. */
+.document-verification-panel .doc-checklist-list{list-style:none;margin:16px 0 0;padding:0;display:grid;gap:10px}
+.document-verification-panel .doc-checklist-row{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:14px 16px;background:#f8faff;border:1px solid #e0e8f6;border-radius:13px;min-width:0}
+.document-verification-panel .doc-checklist-index{display:grid;place-items:center;flex:0 0 28px;height:28px;background:#e8eaff;color:#4935bc;border-radius:9px;font-size:12px;font-weight:800}
+.document-verification-panel .doc-checklist-main{flex:1 1 150px;min-width:0;display:grid;gap:4px}
+.document-verification-panel .doc-checklist-name{font-size:13px;font-weight:750;color:#24385b}
+.document-verification-panel .doc-checklist-main small{font-size:11px;color:#64748b}
+.document-verification-panel .doc-checklist-actions{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.document-verification-panel .doc-action-btn{border:1px solid #d4dfed;border-radius:8px;padding:8px 11px;background:white;color:#294f95;cursor:pointer;font-size:11px;font-weight:700}
+.document-verification-panel .doc-action-btn.verify{color:#12754e;border-color:#b7e5cc}
+.document-verification-panel .doc-action-btn.reject{color:#b5344a;border-color:#f2c3cc}
+.document-verification-panel .doc-checklist-badge{display:inline-block;border-radius:99px;padding:5px 9px;font-size:10px;font-weight:750;background:#e8eefb;color:#31539c}
+.document-verification-panel .doc-checklist-badge.not-uploaded{background:#fff1ea;color:#a15b34}
+@media(max-width:600px){.document-verification-panel .doc-checklist-row{padding:12px;gap:10px}.document-verification-panel .doc-checklist-actions{width:100%;padding-left:38px}}

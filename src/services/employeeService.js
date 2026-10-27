@@ -1,4 +1,5 @@
 import { api } from './apiService';
+import { getDocumentRecords } from '../utils/documentRecords';
 import { getLocalCandidates, removeLocalCandidate, fileToDataUrl, saveLocalCandidate } from './storage';
 import {
   getSubmittedApplications,
@@ -125,14 +126,18 @@ export function isSubmittedCandidate(candidate = {}) {
   // Current Address GPS photo is written to the backend only during the final
   // Submit Application flow. For server-backed HR rows it is therefore the
   // cross-browser submission marker; registered/incomplete candidates stay hidden.
-  if (candidate.backendSubmissionReady) return true;
-  if (candidate.backendContactChecked && !candidate.backendSubmissionReady && !candidate.submittedAt) return false;
-
   const status = String(candidate.status || candidate.verificationStatus || '').toUpperCase();
   const submittedStatus = [
     'SUBMITTED', 'PENDING_VERIFICATION', 'DOCUMENTS_VERIFIED',
     'APPROVED', 'REJECTED', 'RE_UPLOAD_REQUIRED', 'REUPLOAD_REQUIRED',
   ].some((value) => status.includes(value));
+  // The HR candidates API may return the submitted status without uploading
+  // contact-photo or document metadata in the list response. The status is
+  // authoritative and must not cause a submitted candidate to disappear from search.
+  if (submittedStatus || candidate.submittedAt) return true;
+  if (['DRAFT', 'REGISTERED', 'INCOMPLETE'].some((value) => status.includes(value))) return false;
+  if (Array.isArray(candidate.documents) && candidate.documents.some((doc) => doc?.id || doc?.fileName)) return true;
+  if (candidate.backendContactChecked) return Boolean(candidate.backendSubmissionReady);
   if (!submittedStatus) return false;
 
   const required = Array.isArray(candidate.requiredDocumentNames) ? candidate.requiredDocumentNames : [];
@@ -263,13 +268,14 @@ const DOCUMENT_TYPE_LABELS = {
 };
 
 const normalizeDocument = (d = {}) => {
-  const id = d.id ?? d.documentId;
+  const id = d.id ?? d.documentId ?? d.fileId;
+  const type = d.documentType || d.docType || d.typeName || d.documentName || d.category || d.type;
   return {
     ...d,
     id,
-    name: d.name ?? DOCUMENT_TYPE_LABELS[d.documentType] ?? String(d.documentType || '').replaceAll('_', ' ').replace(/\b\w/g, (m) => m.toUpperCase()),
-    documentType: d.documentType,
-    fileName: d.fileName || '',
+    name: DOCUMENT_TYPE_LABELS[String(type || '').toUpperCase()] || d.name || String(type || '').replaceAll('_', ' ').replace(/\b\w/g, (m) => m.toUpperCase()),
+    documentType: type,
+    fileName: d.fileName || d.originalFileName || d.filename || '',
     status: d.status || DOC_STATUS.PENDING,
     data: d.data || (id ? `http://localhost:8080/upload/view/${id}` : ''),
   };
@@ -279,11 +285,7 @@ const normalize = (c = {}) => {
   const profile = c.profile || {};
   const employment = c.employment || {};
   const review = c.review || {};
-  const documentsSource = Array.isArray(c.documents)
-    ? c.documents
-    : Array.isArray(review.documents)
-      ? review.documents
-      : [];
+  const documentsSource = getDocumentRecords(c.documents).concat(getDocumentRecords(review));
 
   return {
     ...profile,
@@ -308,7 +310,8 @@ const normalize = (c = {}) => {
     permanentAddress: buildPermanentAddress(c) || buildPermanentAddress(profile) || '',
     currentResidentialAddress: buildCurrentAddress(c) || buildCurrentAddress(profile) || '',
     emergencyContactNumber: c.emergencyContactNumber ?? profile.emergencyContactNumber ?? '',
-    referenceNumber: c.referenceNumber ?? profile.referenceNumber ?? '',
+    referenceNumber: c.referralContactNumber ?? c.referenceNumber ?? profile.referralContactNumber ?? profile.referenceNumber ?? '',
+    referralContactNumber: c.referralContactNumber ?? c.referenceNumber ?? profile.referralContactNumber ?? profile.referenceNumber ?? '',
     currentLatitude: c.currentLatitude ?? profile.currentLatitude ?? '',
     currentLongitude: c.currentLongitude ?? profile.currentLongitude ?? '',
     houseSelfieUploaded: Boolean(c.houseSelfieUploaded ?? profile.houseSelfieUploaded),
@@ -356,7 +359,7 @@ export const allCandidates = async () => {
           ...candidate,
           review,
           contact,
-          documents: review?.documents || candidate.documents || [],
+          documents: getDocumentRecords(review).concat(getDocumentRecords(candidate.documents)),
           permanentAddress: permanentAddress || buildPermanentAddress(candidate),
           currentResidentialAddress: buildCurrentAddress(contact || {}) || buildCurrentAddress(candidate),
           emergencyContactNumber: contact?.emergencyContactNumber || candidate.emergencyContactNumber,
@@ -483,7 +486,7 @@ export const findCandidate = async (id) => {
         ?? summaryCandidate?.technicalSkills
         ?? summaryCandidate?.selectedSkills,
       review,
-      documents: review?.documents || details?.documents || [],
+      documents: getDocumentRecords(review).concat(getDocumentRecords(details.documents)),
     });
 
     // Candidate profile/detail endpoints may omit technical skills even though
@@ -678,6 +681,37 @@ export async function uploadCandidateDocument(candidateId, document) {
     updateSubmittedApplication(candidateId, { requiredDocuments: nextDocs });
     return localDocsFromApplication({ ...app, requiredDocuments: nextDocs, identity: candidateId });
   }
+}
+
+export async function removeCandidateDocument(candidateId, document) {
+  if (!document) throw new Error('Select a document to remove.');
+  if (String(document.status || '').toUpperCase() === DOC_STATUS.VERIFIED) {
+    throw new Error('HR-verified documents cannot be removed.');
+  }
+  if (document.localOnly) {
+    const app = getApplication(candidateId) || getSubmittedApplications().find((item) => item.identity === candidateId);
+    if (!app) throw new Error('Saved application not found.');
+    const nextDocs = { ...(app.requiredDocuments || {}) };
+    delete nextDocs[document.name];
+    updateSubmittedApplication(app.identity || candidateId, { requiredDocuments: nextDocs });
+    return localDocsFromApplication({ ...app, requiredDocuments: nextDocs });
+  }
+  const id = document.id || document.documentId;
+  if (!id) throw new Error('This document has no server ID, so it cannot be deleted safely. Please contact HR.');
+  try {
+    await api.deleteUploadedDocument(id);
+  } catch (error) {
+    if ([404, 405].includes(error?.status)) {
+      throw new Error('The backend does not provide a supported document-delete endpoint. Please ask the backend team to enable deletion.');
+    }
+    throw error;
+  }
+  const result = await api.myDocuments();
+  const records = getDocumentRecords(result).map(normalizeDocument);
+  if (records.some((item) => String(item.id) === String(id))) {
+    throw new Error('The server still reports this document as uploaded. Please refresh and try again.');
+  }
+  return records;
 }
 
 export const getDocumentReviewSummary = (documents = []) => ({
