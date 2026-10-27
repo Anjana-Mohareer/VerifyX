@@ -12,6 +12,7 @@ import {
 import { updateStatus } from "../services/verificationService";
 import { sendInterviewInvitationMail, sendStatusMail } from "../services/mailService";
 import { addNotification } from "../services/notificationService";
+import { requiredCandidateDocuments, findRequiredDocument } from "../utils/requiredCandidateDocuments";
 import "./DashboardPro.css";
 
 function getDocStatus(doc) {
@@ -24,61 +25,20 @@ function getStatusLabel(status) {
   return "Pending Review";
 }
 
-// These fallback lists must mirror the Candidate Portal exactly (CandidateWelcome.jsx:
-// FRESHER_DOCUMENTS / CURRENT_EMPLOYEE_DOCUMENTS / NOT_WORKING_DOCUMENTS) so HR sees the
-// same document count the candidate saw: 3 for Fresher, 6 for currently-working
-// Experienced, 7 for not-working Experienced.
-const FRESHER_REQUIRED_DOCUMENTS = ["Resume", "Aadhaar Card", "PAN Card"];
-const CURRENT_EMPLOYEE_REQUIRED_DOCUMENTS = [
-  "Resume", "Aadhaar Card", "PAN Card", "Current Offer / Appointment Letter",
-  "Latest Salary Slip", "UAN Proof",
-];
 const OPTIONAL_TRAVEL_DOCUMENTS = ['Passport', 'Visa'];
 
-const NOT_WORKING_REQUIRED_DOCUMENTS = [
-  "Resume", "Aadhaar Card", "PAN Card", "Experience Letter",
-  "Relieving Letter", "Last Salary Slip", "UAN Proof",
-];
-
-function canonicalDocumentName(name = '') {
-  const value = String(name).toLowerCase().replace(/[^a-z0-9]+/g, '');
-  if (value.includes('salaryslip')) return 'salaryslip';
-  if (value.includes('offer') && value.includes('letter')) return 'offerletter';
-  if (value.includes('experienceletter')) return 'experienceletter';
-  if (value.includes('relievingletter')) return 'relievingletter';
-  if (value.includes('aadhaar')) return 'aadhaarcard';
-  if (value.includes('pan')) return 'pancard';
-  if (value.includes('uan')) return 'uanproof';
-  if (value.includes('resume')) return 'resume';
-  if (value.includes('passport')) return 'passport';
-  if (value.includes('visa')) return 'visa';
-  return value;
-}
-
 function findUploadedDocument(documents = [], requiredName = '') {
-  const wanted = canonicalDocumentName(requiredName);
-  return documents.find((doc) => canonicalDocumentName(doc?.name || doc?.documentType) === wanted);
+  return findRequiredDocument(documents, requiredName);
 }
 
 function getRequiredDocuments(candidate) {
-  // Prefer the exact document list the candidate was actually asked for on
-  // the Candidate Portal. Falling back to a static guess caused HR to see a
-  // different document count than the candidate actually saw/uploaded.
-  if (Array.isArray(candidate?.requiredDocumentNames) && candidate.requiredDocumentNames.length) {
-    return candidate.requiredDocumentNames;
-  }
-  if (candidate?.candidateType !== "EXPERIENCED") {
-    return FRESHER_REQUIRED_DOCUMENTS;
-  }
-  return String(candidate?.employmentStatus || "").toUpperCase().includes("CURRENT")
-    ? CURRENT_EMPLOYEE_REQUIRED_DOCUMENTS
-    : NOT_WORKING_REQUIRED_DOCUMENTS;
+  return requiredCandidateDocuments(candidate);
 }
 
 function getMissingDocuments(candidate) {
   const uploaded = candidate?.documents || [];
   return getRequiredDocuments(candidate).filter(
-    (name) => !uploaded.some((doc) => doc.name === name)
+    (name) => !findUploadedDocument(uploaded, name)
   );
 }
 
@@ -244,7 +204,7 @@ export default function EmployeeDetails() {
   const allRequiredDocuments = c ? getRequiredDocuments(c) : [];
   const uploadedDocsList = c?.documents || [];
   const uploadedRequiredCount = allRequiredDocuments.filter((name) =>
-    uploadedDocsList.some((doc) => doc.name === name)
+    findUploadedDocument(uploadedDocsList, name)
   ).length;
   const docProgressPct = allRequiredDocuments.length
     ? Math.round((uploadedRequiredCount / allRequiredDocuments.length) * 100)
