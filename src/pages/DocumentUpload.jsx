@@ -9,6 +9,7 @@ import {
   getDocumentReviewSummary,
   rejectCandidateDocument,
   uploadCandidateDocument,
+  removeCandidateDocument,
   verifyCandidateDocument,
   openCandidateDocument,
   DOC_STATUS,
@@ -82,6 +83,7 @@ export default function DocumentUpload({ mode = "admin" }) {
   const [candidateItems, setCandidateItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [removingDocumentId, setRemovingDocumentId] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [recordsPerPage, setRecordsPerPage] = useState(5);
 
@@ -204,6 +206,23 @@ export default function DocumentUpload({ mode = "admin" }) {
     }
   };
 
+  const removeDoc = async (name, document) => {
+    if (!document || !c || removingDocumentId) return;
+    const key = String(document.id || document.documentId || name);
+    if (!window.confirm(`Remove ${name} (${document.fileName || 'uploaded file'})? You will need to upload it again before submission.`)) return;
+    setRemovingDocumentId(key);
+    setError("");
+    try {
+      const documents = await removeCandidateDocument(c.id, document);
+      setC((current) => ({ ...current, documents }));
+    } catch (err) {
+      setError(err?.message || `Unable to remove ${name}.`);
+      alert(err?.message || `Unable to remove ${name}.`);
+    } finally {
+      setRemovingDocumentId("");
+    }
+  };
+
   const submitDocuments = async () => {
     if (!c) return;
 
@@ -282,6 +301,16 @@ export default function DocumentUpload({ mode = "admin" }) {
                   }}
                 >
                   View Uploaded File
+                </button>
+              )}
+              {!isVerified && (
+                <button
+                  type="button"
+                  className="doc-remove-link"
+                  disabled={Boolean(removingDocumentId)}
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); removeDoc(name, found); }}
+                >
+                  {removingDocumentId === String(found.id || found.documentId || name) ? 'Removing…' : 'Remove Document'}
                 </button>
               )}
             </>

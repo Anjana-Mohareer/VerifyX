@@ -23,7 +23,19 @@ export async function loginCandidate(email, password, rememberMe = false) {
     type: 'CANDIDATE', id: data.userId, name: data.username,
     email: data.email || String(email).trim().toLowerCase(),
     role: data.role, candidateType: data.candidateType,
+    phone: data.phoneNumber || data.phone || '',
+    appliedRole: data.appliedRole || data.profile?.appliedRole || '',
   };
+  // Login responses do not always contain role/contact information. Resolve
+  // it from the authenticated profile when available, without blocking login.
+  try {
+    const profile = await api.candidateProfile();
+    if (profile && typeof profile === 'object') {
+      session.phone = profile.phoneNumber || profile.phone || session.phone;
+      session.appliedRole = profile.appliedRole || session.appliedRole;
+      session.candidateType = profile.candidateType || session.candidateType;
+    }
+  } catch { /* A profile may not exist until onboarding is completed. */ }
   setSession(session);
   return session;
 }

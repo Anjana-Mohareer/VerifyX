@@ -3753,3 +3753,6 @@ button,.btn,th,.sidebar a,.topbar a,.page-head h1,.page-header h1,.vx-page-heade
   .hr-reference-edit-form .actions{display:grid;grid-template-columns:1fr}
   .hr-reference-edit-form .actions .btn{width:100%}
 }
+.doc-remove-link{display:inline-flex;align-items:center;justify-content:center;margin-top:8px;margin-left:8px;padding:7px 11px;border:1px solid #f1bdc5;border-radius:9px;background:#fff5f6;color:#ad2542;font-size:12px;font-weight:750;cursor:pointer}
+.doc-remove-link:hover{background:#ffe5e8;border-color:#e58b9a}
+.doc-remove-link:disabled{opacity:.55;cursor:not-allowed}

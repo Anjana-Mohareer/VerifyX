@@ -101,6 +101,17 @@ export const api = {
   updateDocuments: (formData) => request('/upload/re-upload', { method: 'PUT', body: formData }),
   myDocuments: () => request('/upload/my-documents'),
   documentBlob: (id) => requestBlob(`/upload/view/${id}`),
+  deleteUploadedDocument: async (id) => {
+    const encoded = encodeURIComponent(id);
+    try {
+      return await request(`/upload/${encoded}`, { method: 'DELETE' });
+    } catch (error) {
+      // Backend versions may expose the delete operation under /upload/delete.
+      // Only try an alternate route when the first route does not exist.
+      if (![404, 405].includes(error?.status)) throw error;
+      return request(`/upload/delete/${encoded}`, { method: 'DELETE' });
+    }
+  },
   reviewDocuments: (id) => request(`/api/hr/document-review/${id}`),
   reviewDocumentBlob: (id) => requestBlob(`/api/hr/document-review/document/${id}`),
   verifyDocument: (id) => request(`/api/hr/document-review/verify/${id}`, { method: 'PUT' }),

@@ -6,6 +6,9 @@ import { api } from "../services/apiService";
 
 const PHONE_PATTERN = /^[6-9]\d{9}$/;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PERSON_NAME_PATTERN = /^[\p{L}\p{M}]+(?:[ '\-][\p{L}\p{M}]+)*$/u;
+const PROFESSIONAL_TEXT_PATTERN = /^[\p{L}\p{M}]+(?:[ '\-][\p{L}\p{M}]+)*$/u;
+const LOCATION_PATTERN = /^[\p{L}\p{M}]+(?:[ ,.'\-][\p{L}\p{M}]+)*$/u;
 
 const emptyHrProfile = (session = {}) => ({
   name: session.name || "HR Admin",
@@ -87,22 +90,26 @@ export default function Profile() {
 
   const change = (key, value) => {
     let nextValue = value;
-    if (["name", "designation", "employeeId", "department", "location"].includes(key)) {
+    if (["name", "designation", "employeeId", "department", "location", "reportingManager"].includes(key)) {
       nextValue = value.slice(0, 100);
     }
     if (key === "phone") nextValue = value.replace(/\D/g, "").slice(0, 10);
     setProfile((current) => ({ ...current, [key]: nextValue }));
-    setErrors((current) => ({ ...current, [key]: "" }));
+    const patterns = { name: PERSON_NAME_PATTERN, designation: PROFESSIONAL_TEXT_PATTERN, department: PROFESSIONAL_TEXT_PATTERN, reportingManager: PERSON_NAME_PATTERN, location: LOCATION_PATTERN };
+    setErrors((current) => ({ ...current, [key]: patterns[key] && value.trim() && !patterns[key].test(value.trim()) ? 'Use letters and spaces only (hyphens are allowed).' : '' }));
     setMessage("");
   };
 
   const save = (event) => {
     event.preventDefault();
     const nextErrors = {};
-    if (!profile.name.trim() || profile.name.trim().length < 2) nextErrors.name = "Enter a valid HR name.";
+    if (!profile.name.trim() || profile.name.trim().length < 2 || !PERSON_NAME_PATTERN.test(profile.name.trim())) nextErrors.name = "Full name must contain letters and spaces only.";
     if (!PHONE_PATTERN.test(profile.phone)) nextErrors.phone = "Enter a valid 10-digit mobile number.";
     if (!EMAIL_PATTERN.test(profile.email.trim())) nextErrors.email = "Enter a valid email address.";
-    if (!profile.designation.trim()) nextErrors.designation = "Enter a designation.";
+    if (!PROFESSIONAL_TEXT_PATTERN.test(profile.designation.trim())) nextErrors.designation = "Designation must contain letters and spaces only.";
+    if (!PROFESSIONAL_TEXT_PATTERN.test(profile.department.trim())) nextErrors.department = "Department must contain letters and spaces only.";
+    if (profile.reportingManager.trim() && !PERSON_NAME_PATTERN.test(profile.reportingManager.trim())) nextErrors.reportingManager = "Reporting manager must contain letters and spaces only.";
+    if (profile.location.trim() && !LOCATION_PATTERN.test(profile.location.trim())) nextErrors.location = "Location must not contain numbers or symbols.";
     if (Object.keys(nextErrors).length) { setErrors(nextErrors); return; }
 
     const updated = saveHrProfile({
@@ -192,9 +199,9 @@ export default function Profile() {
               <label>Full Name<input value={profile.name} onChange={(e) => change("name", e.target.value)} placeholder="Enter full name" />{errors.name && <span className="field-error">{errors.name}</span>}</label>
               <label>Designation<input value={profile.designation} onChange={(e) => change("designation", e.target.value)} placeholder="e.g. HR Professional" />{errors.designation && <span className="field-error">{errors.designation}</span>}</label>
               <label>Employee ID<input value={profile.employeeId} onChange={(e) => change("employeeId", e.target.value)} placeholder="Employee ID (optional)" /></label>
-              <label>Department<input value={profile.department} onChange={(e) => change("department", e.target.value)} placeholder="Human Resources" /></label>
-              <label>Location<input value={profile.location} onChange={(e) => change("location", e.target.value)} placeholder="Location not added" /></label>
-              <label>Reporting Manager<input value={profile.reportingManager} onChange={(e) => change("reportingManager", e.target.value)} placeholder="Reporting manager not added" /></label>
+              <label>Department<input value={profile.department} onChange={(e) => change("department", e.target.value)} placeholder="Human Resources" aria-invalid={!!errors.department} />{errors.department && <span className="field-error">{errors.department}</span>}</label>
+              <label>Location<input value={profile.location} onChange={(e) => change("location", e.target.value)} placeholder="Location not added" aria-invalid={!!errors.location} />{errors.location && <span className="field-error">{errors.location}</span>}</label>
+              <label>Reporting Manager<input value={profile.reportingManager} onChange={(e) => change("reportingManager", e.target.value)} placeholder="Reporting manager not added" aria-invalid={!!errors.reportingManager} />{errors.reportingManager && <span className="field-error">{errors.reportingManager}</span>}</label>
               <label>Work Mode<select value={profile.workMode} onChange={(e) => change("workMode", e.target.value)}><option value="Onsite">Onsite</option><option value="Remote">Remote</option><option value="Hybrid">Hybrid</option></select></label>
               <label>Joining Date<input type="date" value={profile.joiningDate} onChange={(e) => change("joiningDate", e.target.value)} /></label>
               <label>Mobile Number<input type="tel" inputMode="numeric" value={profile.phone} onChange={(e) => change("phone", e.target.value)} placeholder="Enter 10-digit mobile number" />{errors.phone && <span className="field-error">{errors.phone}</span>}</label>

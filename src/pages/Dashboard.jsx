@@ -23,6 +23,13 @@ const isExperiencedCandidate = (candidate = {}) => {
   return Boolean(employment && employment !== 'FRESHER');
 };
 const rowKey = (candidate = {}) => String(candidate.email || candidate.id || candidate.identity || candidate.fullName || "").trim().toLowerCase();
+const highlightMatch = (value, query) => {
+  const text = String(value || '');
+  const needle = query.trim();
+  if (!needle) return text;
+  const index = text.toLocaleLowerCase().indexOf(needle.toLocaleLowerCase());
+  return index < 0 ? text : <>{text.slice(0, index)}<mark className="hr-search-highlight">{text.slice(index, index + needle.length)}</mark>{text.slice(index + needle.length)}</>;
+};
 
 const isDemoRecord = (record = {}) => {
   const email = String(record.email || record.identity || '').trim().toLowerCase();
@@ -167,7 +174,7 @@ Mail Status: ${result?.mailStatus || 'SENT'}`);
           <img src="/hr-dashboard-illustration-hd.png" alt="" className="hr-dashboard-illustration" />
         </div>
         <div className="hr-heading-actions">
-          <span className="hr-total-count">{loading ? "…" : `${filtered.length} Candidates`}</span>
+          <button type="button" className="hr-total-count hr-candidates-jump" onClick={() => document.getElementById('hr-candidates-table')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>{loading ? "…" : `${filtered.length} Candidates`}</button>
           <button className="btn secondary hr-notification-button" onClick={() => { setShowHrNotifications((value) => !value); markNotificationsRead('HR'); setHrNotifications(getNotifications('HR')); }}>Notifications <span>{hrNotifications.filter((item) => !item.read).length}</span></button>
           <button className="btn primary hr-release-offer" onClick={() => setOfferQueueOpen(true)}>Offer Letter <span>{offerCandidates.filter((item) => item.offerStatus !== 'RELEASED').length}</span></button>
         </div>
@@ -182,7 +189,7 @@ Mail Status: ${result?.mailStatus || 'SENT'}`);
         <article className="hr-summary-card experienced"><span className="hr-summary-icon">💼</span><div><small>Experienced</small><strong>{loading ? "…" : summary.experienced}</strong></div></article>
       </section>
 
-      <section className="hr-dashboard-table-panel">
+      <section className="hr-dashboard-table-panel" id="hr-candidates-table">
         <div className="hr-table-toolbar">
           <label className="hr-dashboard-search"><span>⌕</span><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search" aria-label="Search candidates" /></label>
           <div className="hr-toolbar-actions">
@@ -193,7 +200,7 @@ Mail Status: ${result?.mailStatus || 'SENT'}`);
 
         <div className="hr-candidate-table-wrap">
           <table className="hr-candidate-table">
-            <thead><tr><th>Photo</th><th>ID</th><th>Name</th><th>Phone</th><th>Email ID</th><th>PAN</th><th>Aadhaar</th><th>UAN</th><th>Emergency Contact</th><th>Permanent Address</th><th>Current Address</th><th>Reference No.</th><th>Type</th><th>Skills</th><th>Applied Role</th><th>Status</th><th>Actions</th></tr></thead>
+            <thead><tr><th>Photo</th><th>ID</th><th>Name</th><th>Phone</th><th>Email ID</th><th>PAN</th><th>Aadhaar</th><th>UAN</th><th>Emergency Contact</th><th>Permanent Address</th><th>Current Address</th><th>Referral Contact No.</th><th>Type</th><th>Skills</th><th>Applied Role</th><th>Status</th><th>Actions</th></tr></thead>
             <tbody>
               {loading ? <tr><td colSpan="17" className="hr-empty-row">Loading candidates…</td></tr> :
                 visible.length ? visible.map((candidate, index) => {
@@ -202,7 +209,7 @@ Mail Status: ${result?.mailStatus || 'SENT'}`);
                   return <tr key={rowKey(candidate) || id}>
                     <td data-label="Photo"><CandidatePhoto candidate={candidate} /></td>
                     <td data-label="ID"><span className="hr-id-cell" title={String(id)}>{String(id)}</span></td>
-                    <td data-label="Name"><strong className="hr-name-cell">{candidate.fullName || candidate.name || "Not Added"}</strong></td>
+                    <td data-label="Name"><strong className="hr-name-cell">{highlightMatch(candidate.fullName || candidate.name || "Not Added", query)}</strong></td>
                     <td data-label="Phone">{candidate.phone || candidate.mobile || "Not Added"}</td>
                     <td data-label="Email ID"><span className="hr-email-cell">{candidate.email || "Not Added"}</span></td>
                     <td data-label="PAN">{candidate.pan || candidate.panNumber || "Not Added"}</td>
@@ -211,7 +218,7 @@ Mail Status: ${result?.mailStatus || 'SENT'}`);
                     <td data-label="Emergency Contact">{candidate.emergencyContactNumber || "Not Added"}</td>
                     <td data-label="Permanent Address"><span className="hr-address-cell" title={candidate.permanentAddress || ''}>{candidate.permanentAddress || "Not Added"}</span></td>
                     <td data-label="Current Address"><span className="hr-address-cell" title={candidate.currentResidentialAddress || ''}>{candidate.currentResidentialAddress || "Not Added"}</span></td>
-                    <td data-label="Reference No.">{candidate.referenceNumber || "Optional / Not Added"}</td>
+                    <td data-label="Referral Contact No.">{candidate.referralContactNumber || candidate.referenceNumber || "Optional / Not Added"}</td>
                     <td data-label="Type"><span className="hr-type-pill">{label(candidate.candidateType || "Fresher")}</span></td>
                     <td data-label="Skills"><div className="hr-skill-list">{skills.length ? skills.slice(0, 3).map((skill) => <span key={skill}>{skill}</span>) : <em>Not Added</em>}{skills.length > 3 && <span>+{skills.length - 3}</span>}</div></td>
                     <td data-label="Applied Role">{candidate.appliedRole ? label(candidate.appliedRole) : "Not Added"}</td>
