@@ -632,7 +632,13 @@ export default function CandidateWelcome() {
         uanNumber: isExperienced ? String(form.uanNumber || '').replace(/\D/g, '') : '',
       });
     } catch (identityError) {
-      console.warn('Unable To Sync PAN/Aadhaar/UAN To Backend:', identityError);
+      // Do not submit a "complete" application if the backend rejected the
+      // identity values: that previously left HR seeing "Not Added".
+      const errorMessage = identityError?.message || 'The server could not save your PAN, Aadhaar and UAN numbers.';
+      setSavedMessage(`Identity details were not saved: ${errorMessage}`);
+      window.alert(`Unable to save identity details. Please retry before submitting.\n\n${errorMessage}`);
+      document.getElementById('required-documents')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return;
     }
 
     // Keep HR dashboard skills in sync with what the candidate selected.
