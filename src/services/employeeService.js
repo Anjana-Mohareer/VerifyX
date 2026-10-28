@@ -597,17 +597,8 @@ export async function updateCandidate(id, patch) {
   try {
     const saved = await api.updateCandidateProfile(body);
     return normalize({ ...patch, ...saved, id });
-  } catch {
-    const saved = updateSubmittedApplication(id, {
-      ...patch,
-      fullName: patch.fullName || patch.username || '',
-      phone: patch.phone || patch.phoneNumber || '',
-      panNumber: String(patch.pan || patch.panNumber || '').toUpperCase(),
-      aadhaarNumber: patch.aadhaar || patch.aadhaarNumber || '',
-      skills: Array.isArray(patch.skills) ? patch.skills : [],
-    });
-    if (!saved) throw new Error('Candidate could not be updated.');
-    return normalize({ ...saved, id });
+  } catch (error) {
+    throw new Error(error?.message || 'Candidate could not be updated on the server.');
   }
 }
 

@@ -16,7 +16,7 @@ export default function EditEmployee() {
       setForm({
         fullName: candidate.fullName || "", email: candidate.email || "", phone: candidate.phone || "",
         candidateType: candidate.candidateType || "FRESHER", appliedRole: candidate.appliedRole || "",
-        address: candidate.address || "", pan: candidate.pan || "", aadhaar: candidate.aadhaar || "",
+        address: candidate.permanentAddress || candidate.address || "", pan: candidate.pan || "", aadhaar: candidate.aadhaar || "",
         skills: Array.isArray(candidate.skills) ? candidate.skills : [],
       });
     }).catch((err) => setError(err.message || "Unable to load candidate.")).finally(() => setLoading(false));

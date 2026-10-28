@@ -350,8 +350,14 @@ Ask the candidate to upload them.`
 
     try {
       await rejectCandidateDocument(c.id, doc, reason.trim());
-      setC(await findCandidate(c.id));
-      alert(`${doc.name} rejected. Candidate can re-upload only this document.`);
+      const refreshed = await findCandidate(c.id);
+      setC(refreshed);
+      try {
+        await sendStatusMail({ ...c, ...refreshed }, 'RE_UPLOAD_REQUIRED', `${doc.name} rejected. Reason: ${reason.trim()}. Please log in and re-upload the corrected document.`);
+        alert(`${doc.name} rejected. Re-upload instructions emailed to the candidate.`);
+      } catch (mailError) {
+        alert(`${doc.name} rejected, but email delivery failed: ${mailError?.message || 'Email service unavailable'}. Please contact the candidate.`);
+      }
     } catch (err) {
       alert(err?.message || "Unable to reject document.");
     }
