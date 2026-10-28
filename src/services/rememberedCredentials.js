@@ -1,6 +1,4 @@
-// Browser-only Remember Me: email in localStorage, password encrypted with a
-// non-extractable AES-GCM key held by this browser's IndexedDB. No password is
-// sent anywhere beyond the existing login request.
+// Remember only email, never a password or decryptable ciphertext.
 const DATABASE = 'verifyx-remembered-credentials-v1';
 const STORE = 'keys';
 const KEY_ID = 'aes-gcm-key';
@@ -43,10 +41,7 @@ export function forgetCredentials(storageKey) {
 }
 
 export async function saveRememberedCredentials(storageKey, email, password) {
-  const key = await getEncryptionKey(true);
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-  const encrypted = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(password));
-  localStorage.setItem(storageKey, JSON.stringify({ email, iv: toBase64(iv), ciphertext: toBase64(encrypted) }));
+  localStorage.setItem(storageKey, JSON.stringify({ email }));
 }
 
 export async function readRememberedCredentials(storageKey) {
@@ -59,14 +54,6 @@ export async function readRememberedCredentials(storageKey) {
     localStorage.setItem(storageKey, JSON.stringify({ email: saved.email }));
     return { email: saved.email, password: '' };
   }
-  if (!saved.iv || !saved.ciphertext) return { email: saved.email, password: '' };
-  try {
-    const key = await getEncryptionKey();
-    if (!key) throw new Error('Missing encryption key.');
-    const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: fromBase64(saved.iv) }, key, fromBase64(saved.ciphertext));
-    return { email: saved.email, password: new TextDecoder().decode(decrypted) };
-  } catch {
-    forgetCredentials(storageKey);
-    return { email: '', password: '' };
-  }
+  if (saved.iv || saved.ciphertext) localStorage.setItem(storageKey, JSON.stringify({ email: saved.email }));
+  return { email: saved.email, password: '' };
 }

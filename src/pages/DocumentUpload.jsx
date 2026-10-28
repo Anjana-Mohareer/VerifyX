@@ -2,6 +2,7 @@ const shownAlerts = new Set();
 import { useEffect, useMemo, useState } from "react";
 import Sidebar from "../components/Sidebar";
 import useAuth from "../hooks/useAuth";
+import { requiredCandidateDocuments, findRequiredDocument } from "../utils/requiredCandidateDocuments";
 import {
   allCandidates,
   findCandidate,
@@ -37,7 +38,7 @@ function getDocumentRule(name) {
 function getMissingDocuments(candidate) {
   const required = getRequiredDocuments(candidate);
   const uploaded = candidate?.documents || [];
-  return required.filter((name) => !uploaded.some((doc) => doc.name === name));
+  return required.filter((name) => !findRequiredDocument(uploaded, name));
 }
 
 function isAcceptedFile(file, rule) {
@@ -60,11 +61,7 @@ function getCandidateTime(candidate) {
 }
 
 function getRequiredDocuments(candidate) {
-  const experienced = String(candidate?.candidateType || "").toUpperCase().includes("EXPER");
-  if (!experienced) return FRESHER_DOCUMENTS;
-  const status = String(candidate?.employmentStatus || "").toUpperCase();
-  const currentlyWorking = ["CURRENTLY_WORKING", "CURRENTLY_EMPLOYED"].includes(status) || String(candidate?.currentlyEmployed || "").toUpperCase() === "YES";
-  return currentlyWorking ? CURRENT_EMPLOYEE_DOCUMENTS : NOT_WORKING_DOCUMENTS;
+  return requiredCandidateDocuments(candidate);
 }
 
 function getDocStatus(doc) {
