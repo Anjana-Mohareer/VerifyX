@@ -64,25 +64,33 @@ export default function CandidatePortal(){
 
   useEffect(()=>{
     if(!identity) return;
+    let cancelled = false;
     const saved = getApplication(identity);
-    const draft = saved;
     const local = findLocalCandidate(session?.email) || {};
-    setApplication(saved ? {
+    setApplication({
       ...saved,
-      phone: saved.phone || local.phone || session?.phone || '',
-      appliedRole: saved.appliedRole || local.appliedRole || session?.appliedRole || '',
-    } : (draft ? {
-      ...draft,
-      fullName: draft.fullName || local.fullName || session?.name,
-      email: local.email || session?.email,
-      appliedRole: local.appliedRole || session?.appliedRole || '',
-      status:'DRAFT'
-    } : null));
+      fullName: saved?.fullName || local.fullName || session?.name || '',
+      email: saved?.email || local.email || session?.email || '',
+      phone: saved?.phone || local.phone || session?.phone || '',
+      appliedRole: saved?.appliedRole || local.appliedRole || session?.appliedRole || '',
+      candidateType: saved?.candidateType || session?.candidateType || 'Fresher',
+      status: saved?.status || 'DRAFT',
+    });
+    api.candidateProfile().then((response) => {
+      if (cancelled) return;
+      const profile = response?.profile || response || {};
+      setApplication((old) => ({ ...old,
+        fullName: old.fullName || profile.fullName || profile.username || '',
+        phone: old.phone || profile.phoneNumber || profile.phone || '',
+        appliedRole: old.appliedRole || profile.appliedRole || '',
+      }));
+    }).catch(() => {});
     if (saved?.status === 'DRAFT') {
       setActiveSection('profile');
       setShowProgress(true);
     }
-  },[identity,session?.email,session?.name,session?.appliedRole,nav]);
+    return () => { cancelled = true; };
+  },[identity,session?.email,session?.name,session?.appliedRole,session?.phone,session?.candidateType]);
 
   useEffect(() => {
     const refreshNotifications = () => setNotifications(getNotifications('CANDIDATE', session?.email));

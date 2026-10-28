@@ -94,6 +94,9 @@ export default function Profile() {
       nextValue = value.slice(0, 100);
     }
     if (key === "phone") nextValue = value.replace(/\D/g, "").slice(0, 10);
+    if (["name", "designation", "department", "reportingManager", "location"].includes(key)) {
+      nextValue = nextValue.replace(key === "location" ? /[^\p{L}\p{M} ,.'\-]/gu : /[^\p{L}\p{M} '\-]/gu, "");
+    }
     setProfile((current) => ({ ...current, [key]: nextValue }));
     const patterns = { name: PERSON_NAME_PATTERN, designation: PROFESSIONAL_TEXT_PATTERN, department: PROFESSIONAL_TEXT_PATTERN, reportingManager: PERSON_NAME_PATTERN, location: LOCATION_PATTERN };
     setErrors((current) => ({ ...current, [key]: patterns[key] && value.trim() && !patterns[key].test(value.trim()) ? 'Use letters and spaces only (hyphens are allowed).' : '' }));
