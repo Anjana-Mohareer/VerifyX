@@ -1,10 +1,12 @@
 import { NavLink, useNavigate } from "react-router-dom";
 import useAuth from "../hooks/useAuth";
+import { useState } from "react";
 const logo = "/verify-x-logo.svg";
 
 export default function Sidebar({ type }) {
   const { session, logout } = useAuth();
   const nav = useNavigate();
+  const [menuOpen, setMenuOpen] = useState(false);
   const role = type || session?.type;
 
   const admin = [
@@ -25,13 +27,14 @@ export default function Sidebar({ type }) {
   const footerRole = isCandidate ? "CANDIDATE" : "HR";
 
   return (
-    <aside className="sidebar">
+    <aside className={`sidebar${menuOpen ? ' sidebar-menu-open' : ''}`}>
       <div className="side-logo">
         <img src={logo} alt="Verify-X" className="sidebar-logo" />
       </div>
+      <button type="button" className="sidebar-menu-toggle" aria-label={menuOpen ? 'Close menu' : 'Open menu'} aria-expanded={menuOpen} onClick={() => setMenuOpen(value => !value)}>☰ <span>Menu</span></button>
 
       {links.map(([to, label]) => (
-        <NavLink key={to} to={to}>
+        <NavLink key={to} to={to} onClick={() => setMenuOpen(false)}>
           {label}
         </NavLink>
       ))}
