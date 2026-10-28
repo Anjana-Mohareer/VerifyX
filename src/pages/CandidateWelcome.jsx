@@ -9,6 +9,7 @@ import { sendApplicationSubmittedMail, sendProfileCompletionReminder } from '../
 import { addNotification, ensureRegistrationReminder } from '../services/notificationService';
 import { IT_SKILLS, IT_TOOLS, getRoleRecommendations } from '../utils/constants';
 import { hasTravelDocument, getDocumentRecords, documentName } from '../utils/documentRecords';
+import { readCandidateIdentity } from '../utils/identityFields';
 import SkillMultiSelect from '../components/SkillMultiSelect';
 import './CandidateWelcome.css';
 import verifyXLogo from '../assets/verify-x-full-logo.png';
@@ -124,6 +125,7 @@ export default function CandidateWelcome() {
   const [extracting, setExtracting] = useState(false);
   const [message, setMessage] = useState('');
   const [savedMessage, setSavedMessage] = useState('');
+  const [profileLoaded, setProfileLoaded] = useState(false);
 
   useEffect(() => {
     const saved = getApplication(identity);
@@ -151,10 +153,58 @@ export default function CandidateWelcome() {
 
   useEffect(() => { ensureRegistrationReminder({ email: session?.email }); }, [session?.email]);
 
+  // Recover server-persisted records for this authenticated candidate.
+  useEffect(() => {
+    if (!identity) return;
+    let cancelled = false;
+    async function restore() {
+      const [p, a, c, d] = await Promise.allSettled([
+        api.candidateProfile(), api.myPermanentAddress(), api.myCurrentAddress(), api.myDocuments(),
+      ]);
+      if (cancelled) return;
+      const response = p.status === 'fulfilled' ? p.value || {} : {};
+      const profile = response.profile || response;
+      const permanent = a.status === 'fulfilled' ? a.value || {} : {};
+      const current = c.status === 'fulfilled' ? c.value || {} : {};
+      const docs = d.status === 'fulfilled' ? getDocumentRecords(d.value) : [];
+      const numbers = readCandidateIdentity({ ...response, profile });
+      const values = {
+        fullName: profile.fullName || profile.username || session?.name,
+        appliedRole: profile.appliedRole || session?.appliedRole,
+        panNumber: numbers.pan, aadhaarNumber: numbers.aadhaar, uanNumber: numbers.uan,
+        emergencyContactNumber: permanent.emergencyContactNumber,
+        referralContactNumber: permanent.referralContactNumber,
+      };
+      for (const [prefix, data] of [['permanent', permanent], ['current', current]]) {
+        for (const [field, backend] of [['Line1', 'AddressLine1'], ['Line2', 'AddressLine2'], ['Area', 'AreaLocality'], ['City', 'City'], ['District', 'District'], ['State', 'State'], ['Pincode', 'Pincode']]) {
+          values[prefix + field] = data[prefix + backend] || data[prefix + field] || '';
+        }
+      }
+      setForm((draft) => {
+        const next = { ...draft };
+        Object.entries(values).forEach(([field, value]) => { if (value && !draft[field]) next[field] = value; });
+        const uploads = { ...draft.requiredDocuments };
+        Object.entries(BACKEND_DOCUMENT_FIELDS).forEach(([label, serverName]) => {
+          const record = docs.find((doc) => documentName(doc) === documentName({ documentType: serverName }));
+          if (record && !uploads[label]?.fileName) uploads[label] = {
+            documentId: record.id || record.documentId || record.fileId,
+            fileName: record.fileName || record.originalFileName || record.filename || `${label} uploaded`,
+            verificationStatus: 'PENDING',
+          };
+        });
+        next.requiredDocuments = uploads;
+        return next;
+      });
+      setProfileLoaded(true);
+    }
+    restore().catch(() => { if (!cancelled) setProfileLoaded(true); });
+    return () => { cancelled = true; };
+  }, [identity, session?.name, session?.appliedRole]);
+
   // Address fields are manual-only. Document/marks-card extraction remains unchanged.
 
   useEffect(() => {
-    if (!identity || !form.fullName) return;
+    if (!identity || !form.fullName || !profileLoaded) return;
     const timer = setTimeout(() => {
       saveApplication(identity, { ...form, status: 'DRAFT' });
       
@@ -162,7 +212,7 @@ export default function CandidateWelcome() {
       setTimeout(() => setSavedMessage(''), 1400);
     }, 450);
     return () => clearTimeout(timer);
-  }, [form, identity, key, startedKey]);
+  }, [form, identity, key, startedKey, profileLoaded]);
 
   const set = (field, value) => setForm((f) => ({ ...f, [field]: value }));
   const setEmploymentStatus = (status) => setForm((f) => {
