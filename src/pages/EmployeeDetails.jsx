@@ -314,7 +314,8 @@ Ask the candidate to upload them.`
   const confirmInterviewSchedule = async () => {
     const cleanSlots = interviewSlots.map((slot) => String(slot || '').trim()).filter(Boolean);
     if (cleanSlots.length < 2) { alert('Please Provide At Least Two Interview Time Slots.'); return; }
-    if (cleanSlots.some((slot) => new Date(slot).getTime() <= Date.now())) { alert('Please Select Future Interview Time Slots.'); return; }
+    if (cleanSlots.some((slot) => !Number.isFinite(new Date(slot).getTime()) || new Date(slot).getTime() <= Date.now())) { alert('Please Select Valid Future Interview Time Slots.'); return; }
+    if (new Set(cleanSlots).size !== cleanSlots.length) { alert('Please Select Different Interview Time Slots.'); return; }
     setInterviewSaving(true);
     try {
       await updateStatus(c.id, 'Approved', remarks, cleanSlots.map((slot) => slot.length === 16 ? `${slot}:00` : slot));

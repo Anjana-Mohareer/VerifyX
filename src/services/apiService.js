@@ -95,7 +95,15 @@ export const api = {
   candidates: () => request('/api/hr/candidates'),
   candidate: (id) => request(`/api/hr/candidates/${id}`),
   deleteCandidate: (id) => request(`/api/hr/candidates/${id}`, { method: 'DELETE' }),
-  updateStatus: (id, body) => request(`/api/hr/candidates/${id}/status`, { method: 'PUT', body: JSON.stringify(body) }),
+  updateStatus: (id, body) => {
+    // CandidateManagementController consumes @RequestParam, not a JSON request body.
+    const params = new URLSearchParams({ status: body.status });
+    if (body.remarks) params.set('remarks', body.remarks);
+    if (Array.isArray(body.interviewSlots) && body.interviewSlots.length) {
+      params.set('interviewSlots', body.interviewSlots.join(','));
+    }
+    return request(`/api/hr/candidates/${encodeURIComponent(id)}/status?${params}`, { method: 'PUT' });
+  },
   verifyUan: (id, body = { status: 'VERIFIED' }) => request(`/api/hr/candidates/${id}/verify-uan`, { method: 'PUT', body: JSON.stringify(body) }),
   uploadDocuments: (formData) => request('/upload/upload', { method: 'POST', body: formData }),
   updateDocuments: (formData) => request('/upload/re-upload', { method: 'PUT', body: formData }),

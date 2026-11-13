@@ -206,7 +206,7 @@ export default function Login({ mode }) {
             </div>
 
             <div className="vx-login-options">
-              <label className="vx-remember-row" htmlFor="vx-remember-me"><input id="vx-remember-me" className="vx-remember-checkbox" type="checkbox" checked={rememberMe} onChange={(e) => changeRememberMe(e.target.checked)} /><span>Remember Me</span></label>
+              <label className="vx-remember-row" htmlFor="vx-remember-me"><input id="vx-remember-me" className="vx-remember-checkbox" type="checkbox" checked={rememberMe} disabled={!form.password.trim()} onChange={(e) => changeRememberMe(e.target.checked)} /><span>Remember Me</span></label>
               <button type="button" className="vx-forgot-link" onClick={()=>{setErr("");setMsg("");setOtpSent(false);setForgot(true);setReset((r)=>({...r,identifier:form.email.trim().toLowerCase(),otp:"",newPassword:"",confirmPassword:""}))}}>Forgot Password?</button>
             </div>
 

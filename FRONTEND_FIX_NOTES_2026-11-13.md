@@ -1,0 +1,12 @@
+# VerifyX frontend fixes — 13 Nov 2026
+
+## Changes made
+- Login Remember Me: HR/candidate credentials stay separate; successful opt-in login now encrypts the password with WebCrypto AES-GCM, using a non-exportable key stored in IndexedDB. The email and encrypted payload are kept in localStorage. Checkbox starts unchecked and is disabled if the password input is blank. Unchecking clears the saved record. Legacy plaintext password records are discarded.
+- Edit Candidate: comma-separated skills now remain editable while typing; splitting/trimming/deduplication occurs on submit. Added HTML and submit-time validation for mobile (10 digits, starting 6–9), PAN (ABCDE1234F), Aadhaar (12 digits), and email, with messages.
+- HR interview scheduling: frontend request to PUT /api/hr/candidates/{candidateId}/status now uses request query parameters `status`, `remarks`, `interviewSlots` matching the actual Java controller's `@RequestParam` signatures (previously JSON body). Prevent duplicate, malformed, and past slots.
+
+## Backend limitations and testing
+- **HR Edit Candidate cannot be guaranteed to save**: current frontend `updateCandidate` calls PUT `/api/candidate/profile`, but the supplied backend endpoint updates the *authenticated candidate* and has no `candidateId` argument. The supplied backend provides HR GET `/api/hr/candidates/{candidateId}` but has no HR update candidate endpoint. Backend needs an authorized HR PUT/PATCH endpoint. The supplied CandidateProfileDto has technicalSkills commented out, so the backend does not currently support saving skills via that DTO. The frontend therefore does NOT invent data persistence or modify the backend.
+- Browsers isolate storage by origin, including port: http://localhost:5173 and http://localhost:5174 have separate localStorage and IndexedDB. Remember Me can work independently on either port after the user logs in there and checks the box. Credential records cannot automatically transfer between ports. Do not use a Vite-port-based workaround to share sensitive credentials.
+- The password is encrypted at rest on the local device, but browser-origin code may read it to populate the login form. For stronger security, use browser password managers / credential APIs instead of custom Remember Me password storage.
+- The backend and database were not launched as a live integrated environment. Endpoint alignment was checked against the uploaded Java source. Other backend-dependent errors need integration testing with running services, configured mail, and test accounts.
